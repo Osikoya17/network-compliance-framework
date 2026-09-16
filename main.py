@@ -1,5 +1,6 @@
 import yaml
 
+from webreport.report_generator import generate_report
 from parser.config_parser import CiscoConfigParser, load_config
 from compliance.engine import ComplianceEngine
 
@@ -144,6 +145,10 @@ def main():
     )
 
     print("=" * 60)
+    generate_report(
+        all_results,
+        collection_summary="live SSH (Netmiko) for R1-CORE, SW1-ACCESS, SW2-ACCESS; file-based for R2-ISP",
+    )
 
 
 if __name__ == "__main__":
