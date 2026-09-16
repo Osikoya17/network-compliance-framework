@@ -108,7 +108,13 @@ class CiscoConfigParser:
                 1
             ).strip()
 
-            interface = {
+            # Running-config is cumulative: the same interface can
+            # appear in more than one block (e.g. remediation commands
+            # appended later in the file). Start from whatever was
+            # already parsed for this interface so a later block only
+            # updates what it actually mentions, instead of erasing
+            # everything already known about it.
+            interface = interfaces.get(interface_name, {
                 "name": interface_name,
                 "mode": None,
                 "access_vlan": None,
@@ -120,7 +126,7 @@ class CiscoConfigParser:
                 "sticky_mac": False,
                 "violation_mode": None,
                 "routed": False,
-            }
+            })
 
             for line in lines[1:]:
 

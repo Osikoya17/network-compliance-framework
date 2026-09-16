@@ -4,7 +4,7 @@ from remediation.applier import RemediationApplier
 def main():
 
     config_path = (
-    "data/configurations/SW1-ACCESS.txt"
+    "data/test_configurations/SW1-ACCESS.txt"
 )
 
     remediation = """interface FastEthernet0/10
