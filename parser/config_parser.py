@@ -22,13 +22,20 @@ class CiscoConfigParser:
         return "ip ssh version 2" in self.config
 
     def telnet_allowed(self):
-        return bool(
-            re.search(
-                r"transport input.*telnet",
-                self.config,
-                re.IGNORECASE
-            )
+        # Running-config is cumulative: if "transport input" is set
+        # more than once (e.g. a remediation block appended after an
+        # earlier violation), the LAST occurrence is the one that
+        # actually takes effect on the device.
+        matches = re.findall(
+            r"^\s*transport input\s+(.+)$",
+            self.config,
+            re.MULTILINE | re.IGNORECASE
         )
+
+        if not matches:
+            return True
+
+        return "telnet" in matches[-1].lower()
 
     def password_encryption_enabled(self):
         return "service password-encryption" in self.config
