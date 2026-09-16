@@ -1,0 +1,1915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Automated Network Configuration & Compliance Framework — Compliance Report</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #1a1a1a;
+    --text-secondary: #5a5a5a;
+    --border: #d8d8d8;
+    --border-strong: #b8b8b8;
+    --pass: #2f6f4e;
+    --pass-bg: #eef4f0;
+    --sev-critical: #8b2e2e;
+    --sev-high: #a85c2e;
+    --sev-medium: #8a7530;
+    --sev-low: #6b6b6b;
+    --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  main {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 56px 24px 96px;
+  }
+
+  header.report-header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 28px;
+    margin-bottom: 36px;
+  }
+
+  header.report-header h1 {
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+  }
+
+  header.report-header p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 14px;
+  }
+
+  header.report-header p.scope {
+    margin-top: 4px;
+  }
+
+  section { margin-bottom: 44px; }
+
+  section > h2 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin: 0 0 16px;
+    text-transform: none;
+  }
+
+  /* Overview stats */
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border: 1px solid var(--border);
+  }
+  .stat-cell {
+    padding: 18px 20px;
+    border-right: 1px solid var(--border);
+  }
+  .stat-cell:last-child { border-right: none; }
+  .stat-cell .value {
+    font-size: 28px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+  .stat-cell .label {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-top: 6px;
+  }
+  .band-good { color: var(--pass); }
+  .band-mid { color: var(--sev-medium); }
+  .band-poor { color: var(--sev-critical); }
+
+  /* Device score bars */
+  .bar-row {
+    display: grid;
+    grid-template-columns: 160px 1fr 64px;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .bar-row:first-child { border-top: 1px solid var(--border); }
+  .bar-row .device-name {
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+  }
+  .bar-track {
+    height: 10px;
+    border: 1px solid var(--border-strong);
+    background: #fafafa;
+    position: relative;
+  }
+  .bar-fill { height: 100%; }
+  .bar-fill.bar-good { background: var(--pass); }
+  .bar-fill.bar-mid { background: var(--sev-medium); }
+  .bar-fill.bar-poor { background: var(--sev-critical); }
+  .bar-row .device-score {
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    font-size: 13.5px;
+  }
+
+  /* Filter controls */
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    border: 1px solid var(--border);
+    padding: 12px 14px;
+  }
+  .filters input[type="search"] {
+    flex: 1;
+    min-width: 180px;
+    border: 1px solid var(--border-strong);
+    padding: 7px 10px;
+    font-family: var(--font-sans);
+    font-size: 13.5px;
+    color: var(--text);
+    background: #fff;
+  }
+  .filters input[type="search"]:focus,
+  .sev-toggle:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 1px;
+  }
+  .sev-toggle {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    padding: 6px 10px;
+    background: #fff;
+    border: 1px solid var(--border-strong);
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .sev-toggle[aria-pressed="true"] {
+    color: #fff;
+    border-color: var(--text);
+    background: var(--text);
+  }
+  .filters .count {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-left: auto;
+  }
+
+  /* Device detail blocks */
+  details.device {
+    border: 1px solid var(--border);
+    margin-bottom: -1px;
+  }
+  details.device summary {
+    list-style: none;
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: baseline;
+    gap: 16px;
+    padding: 14px 16px;
+    cursor: pointer;
+  }
+  details.device summary::-webkit-details-marker { display: none; }
+  details.device summary .device-name {
+    font-family: var(--font-mono);
+    font-size: 14.5px;
+    font-weight: 600;
+  }
+  details.device summary .device-score {
+    font-variant-numeric: tabular-nums;
+    font-size: 14px;
+  }
+  details.device summary .device-tally {
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+  details.device[open] summary { border-bottom: 1px solid var(--border); }
+
+  table.checks {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+  }
+  table.checks th {
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12.5px;
+  }
+  table.checks td {
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.checks tr:last-child td { border-bottom: none; }
+  table.checks td.rule { max-width: 260px; }
+  table.checks td.interface,
+  table.checks td.expected,
+  table.checks td.actual {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+  table.checks tr.fail td.rule { border-left: 3px solid var(--row-sev, var(--sev-high)); padding-left: 11px; }
+  table.checks tr.pass td.rule { border-left: 3px solid transparent; padding-left: 11px; }
+
+  .status-badge {
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .status-badge.pass { color: var(--pass); }
+  .status-badge.fail { color: var(--row-sev, var(--sev-high)); }
+
+  .sev-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  tr[data-hidden="true"] { display: none; }
+
+  footer {
+    margin-top: 56px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 12.5px;
+  }
+
+  @media print {
+    details.device { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+  <header class="report-header">
+    <h1>Automated Network Configuration & Compliance Framework</h1>
+    <p>Compliance scan — Wednesday, 16 September 2026 22:32</p>
+    <p class="scope">4 devices scanned · 109 checks evaluated</p>
+  </header>
+
+  <section class="overview">
+    <div class="stat-row">
+      <div class="stat-cell">
+        <div class="value band-poor">46.77%</div>
+        <div class="label">Overall network score</div>
+      </div>
+      <div class="stat-cell">
+        <div class="value">4</div>
+        <div class="label">Devices scanned</div>
+      </div>
+      <div class="stat-cell">
+        <div class="value">50</div>
+        <div class="label">Checks passed</div>
+      </div>
+      <div class="stat-cell">
+        <div class="value band-poor">59</div>
+        <div class="label">Checks failed</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Score by device</h2>
+    
+    <div class="bar-row">
+      <div class="device-name">R1-CORE</div>
+      <div class="bar-track">
+        <div class="bar-fill bar-poor" style="width: 41.18%;"></div>
+      </div>
+      <div class="device-score">41.18%</div>
+    </div>
+    
+    <div class="bar-row">
+      <div class="device-name">R2-ISP</div>
+      <div class="bar-track">
+        <div class="bar-fill bar-poor" style="width: 54.55%;"></div>
+      </div>
+      <div class="device-score">54.55%</div>
+    </div>
+    
+    <div class="bar-row">
+      <div class="device-name">SW1-ACCESS</div>
+      <div class="bar-track">
+        <div class="bar-fill bar-poor" style="width: 46.34%;"></div>
+      </div>
+      <div class="device-score">46.34%</div>
+    </div>
+    
+    <div class="bar-row">
+      <div class="device-name">SW2-ACCESS</div>
+      <div class="bar-track">
+        <div class="bar-fill bar-poor" style="width: 45.0%;"></div>
+      </div>
+      <div class="device-score">45.0%</div>
+    </div>
+    
+  </section>
+
+  <section>
+    <h2>Filter checks</h2>
+    <div class="filters" id="filters">
+      <input type="search" id="search-box" placeholder="Search rule, interface, device…" aria-label="Search checks">
+      <button class="sev-toggle" data-filter="status" data-value="fail" aria-pressed="false">Failing only</button>
+      <button class="sev-toggle" data-filter="severity" data-value="CRITICAL" aria-pressed="false">Critical</button>
+      <button class="sev-toggle" data-filter="severity" data-value="HIGH" aria-pressed="false">High</button>
+      <button class="sev-toggle" data-filter="severity" data-value="MEDIUM" aria-pressed="false">Medium</button>
+      <button class="sev-toggle" data-filter="severity" data-value="LOW" aria-pressed="false">Low</button>
+      <span class="count" id="visible-count"></span>
+    </div>
+  </section>
+
+  <section class="devices">
+    <h2>Results by device</h2>
+    
+    <details class="device" open>
+      <summary>
+        <span class="device-name">R1-CORE</span>
+        <span class="device-tally">7 passed · 10 failed</span>
+        <span class="device-score band-poor">41.18%</span>
+      </summary>
+      <table class="checks" data-device="R1-CORE">
+        <thead>
+          <tr>
+            <th>Rule</th>
+            <th>Interface</th>
+            <th>Status</th>
+            <th>Expected</th>
+            <th>Actual</th>
+            <th>Severity</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="hostname  r1-core">
+            <td class="rule">Hostname</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">R1-CORE</td>
+            <td class="actual">R1-CORE</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="ssh enabled  r1-core">
+            <td class="rule">SSH enabled</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">True</td>
+            <td class="actual">True</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="CRITICAL"
+              data-search="telnet disabled  r1-core">
+            <td class="rule">Telnet disabled</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">False</td>
+            <td class="actual">False</td>
+            <td><span class="sev-label">CRITICAL</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="password encryption  r1-core">
+            <td class="rule">Password encryption</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">True</td>
+            <td class="actual">True</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="privileged local administrator  r1-core">
+            <td class="rule">Privileged local administrator</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">True</td>
+            <td class="actual">True</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #8a7530;"
+              data-status="fail"
+              data-severity="MEDIUM"
+              data-search="ntp configured  r1-core">
+            <td class="rule">NTP configured</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">True</td>
+            <td class="actual">False</td>
+            <td><span class="sev-label">MEDIUM</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="MEDIUM"
+              data-search="logging configured  r1-core">
+            <td class="rule">Logging configured</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">True</td>
+            <td class="actual">True</td>
+            <td><span class="sev-label">MEDIUM</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet0/0 r1-core">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet0/0</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet0/0.10 r1-core">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet0/0.10</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet0/0.20 r1-core">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet0/0.20</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet0/0.30 r1-core">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet0/0.30</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet0/0.40 r1-core">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet0/0.40</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet0/0.50 r1-core">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet0/0.50</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet0/0.99 r1-core">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet0/0.99</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet0/1 r1-core">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet0/1</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet0/2 r1-core">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet0/2</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet0/3 r1-core">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet0/3</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">shutdown</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </details>
+    
+    <details class="device" open>
+      <summary>
+        <span class="device-name">R2-ISP</span>
+        <span class="device-tally">6 passed · 5 failed</span>
+        <span class="device-score band-poor">54.55%</span>
+      </summary>
+      <table class="checks" data-device="R2-ISP">
+        <thead>
+          <tr>
+            <th>Rule</th>
+            <th>Interface</th>
+            <th>Status</th>
+            <th>Expected</th>
+            <th>Actual</th>
+            <th>Severity</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="hostname  r2-isp">
+            <td class="rule">Hostname</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">R2-ISP</td>
+            <td class="actual">R2-ISP</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="ssh enabled  r2-isp">
+            <td class="rule">SSH enabled</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">True</td>
+            <td class="actual">False</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="CRITICAL"
+              data-search="telnet disabled  r2-isp">
+            <td class="rule">Telnet disabled</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">False</td>
+            <td class="actual">False</td>
+            <td><span class="sev-label">CRITICAL</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="password encryption  r2-isp">
+            <td class="rule">Password encryption</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">True</td>
+            <td class="actual">True</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="privileged local administrator  r2-isp">
+            <td class="rule">Privileged local administrator</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">True</td>
+            <td class="actual">False</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #8a7530;"
+              data-status="fail"
+              data-severity="MEDIUM"
+              data-search="ntp configured  r2-isp">
+            <td class="rule">NTP configured</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">True</td>
+            <td class="actual">False</td>
+            <td><span class="sev-label">MEDIUM</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #8a7530;"
+              data-status="fail"
+              data-severity="MEDIUM"
+              data-search="logging configured  r2-isp">
+            <td class="rule">Logging configured</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">True</td>
+            <td class="actual">False</td>
+            <td><span class="sev-label">MEDIUM</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet0/0 r2-isp">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet0/0</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet0/1 r2-isp">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet0/1</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">shutdown</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet0/2 r2-isp">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet0/2</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">shutdown</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="unused ports shutdown vlan1 r2-isp">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">Vlan1</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">shutdown</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </details>
+    
+    <details class="device" open>
+      <summary>
+        <span class="device-name">SW1-ACCESS</span>
+        <span class="device-tally">19 passed · 22 failed</span>
+        <span class="device-score band-poor">46.34%</span>
+      </summary>
+      <table class="checks" data-device="SW1-ACCESS">
+        <thead>
+          <tr>
+            <th>Rule</th>
+            <th>Interface</th>
+            <th>Status</th>
+            <th>Expected</th>
+            <th>Actual</th>
+            <th>Severity</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="hostname  sw1-access">
+            <td class="rule">Hostname</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">SW1-ACCESS</td>
+            <td class="actual">SW1-ACCESS</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="ssh enabled  sw1-access">
+            <td class="rule">SSH enabled</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">True</td>
+            <td class="actual">True</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #8b2e2e;"
+              data-status="fail"
+              data-severity="CRITICAL"
+              data-search="telnet disabled  sw1-access">
+            <td class="rule">Telnet disabled</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">False</td>
+            <td class="actual">True</td>
+            <td><span class="sev-label">CRITICAL</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="password encryption  sw1-access">
+            <td class="rule">Password encryption</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">True</td>
+            <td class="actual">True</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="privileged local administrator  sw1-access">
+            <td class="rule">Privileged local administrator</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">True</td>
+            <td class="actual">True</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="MEDIUM"
+              data-search="ntp configured  sw1-access">
+            <td class="rule">NTP configured</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">True</td>
+            <td class="actual">True</td>
+            <td><span class="sev-label">MEDIUM</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="MEDIUM"
+              data-search="logging configured  sw1-access">
+            <td class="rule">Logging configured</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">True</td>
+            <td class="actual">True</td>
+            <td><span class="sev-label">MEDIUM</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="vlan 1 not used on user port gigabitethernet0/0 sw1-access">
+            <td class="rule">VLAN 1 not used on user port</td>
+            <td class="interface">GigabitEthernet0/0</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">VLAN other than 1</td>
+            <td class="actual">VLAN 10</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="vlan 1 not used on user port gigabitethernet0/3 sw1-access">
+            <td class="rule">VLAN 1 not used on user port</td>
+            <td class="interface">GigabitEthernet0/3</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">VLAN other than 1</td>
+            <td class="actual">VLAN 20</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="vlan 1 not used on user port gigabitethernet1/0 sw1-access">
+            <td class="rule">VLAN 1 not used on user port</td>
+            <td class="interface">GigabitEthernet1/0</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">VLAN other than 1</td>
+            <td class="actual">VLAN 30</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="vlan 1 not used on user port gigabitethernet1/1 sw1-access">
+            <td class="rule">VLAN 1 not used on user port</td>
+            <td class="interface">GigabitEthernet1/1</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">VLAN other than 1</td>
+            <td class="actual">VLAN 20</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="vlan 1 not used on user port gigabitethernet2/0 sw1-access">
+            <td class="rule">VLAN 1 not used on user port</td>
+            <td class="interface">GigabitEthernet2/0</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">VLAN other than 1</td>
+            <td class="actual">VLAN None</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="port security enabled gigabitethernet0/0 sw1-access">
+            <td class="rule">Port security enabled</td>
+            <td class="interface">GigabitEthernet0/0</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">True</td>
+            <td class="actual">True</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="port security enabled gigabitethernet0/3 sw1-access">
+            <td class="rule">Port security enabled</td>
+            <td class="interface">GigabitEthernet0/3</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">True</td>
+            <td class="actual">True</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="port security enabled gigabitethernet1/0 sw1-access">
+            <td class="rule">Port security enabled</td>
+            <td class="interface">GigabitEthernet1/0</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">True</td>
+            <td class="actual">True</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="port security enabled gigabitethernet1/1 sw1-access">
+            <td class="rule">Port security enabled</td>
+            <td class="interface">GigabitEthernet1/1</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">True</td>
+            <td class="actual">True</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="port security enabled gigabitethernet2/0 sw1-access">
+            <td class="rule">Port security enabled</td>
+            <td class="interface">GigabitEthernet2/0</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">True</td>
+            <td class="actual">False</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #8a7530;"
+              data-status="fail"
+              data-severity="MEDIUM"
+              data-search="maximum mac addresses gigabitethernet0/0 sw1-access">
+            <td class="rule">Maximum MAC addresses</td>
+            <td class="interface">GigabitEthernet0/0</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">1</td>
+            <td class="actual">None</td>
+            <td><span class="sev-label">MEDIUM</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #8a7530;"
+              data-status="fail"
+              data-severity="MEDIUM"
+              data-search="maximum mac addresses gigabitethernet0/3 sw1-access">
+            <td class="rule">Maximum MAC addresses</td>
+            <td class="interface">GigabitEthernet0/3</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">1</td>
+            <td class="actual">None</td>
+            <td><span class="sev-label">MEDIUM</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #8a7530;"
+              data-status="fail"
+              data-severity="MEDIUM"
+              data-search="maximum mac addresses gigabitethernet1/0 sw1-access">
+            <td class="rule">Maximum MAC addresses</td>
+            <td class="interface">GigabitEthernet1/0</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">1</td>
+            <td class="actual">None</td>
+            <td><span class="sev-label">MEDIUM</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #8a7530;"
+              data-status="fail"
+              data-severity="MEDIUM"
+              data-search="maximum mac addresses gigabitethernet1/1 sw1-access">
+            <td class="rule">Maximum MAC addresses</td>
+            <td class="interface">GigabitEthernet1/1</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">1</td>
+            <td class="actual">None</td>
+            <td><span class="sev-label">MEDIUM</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #8a7530;"
+              data-status="fail"
+              data-severity="MEDIUM"
+              data-search="maximum mac addresses gigabitethernet2/0 sw1-access">
+            <td class="rule">Maximum MAC addresses</td>
+            <td class="interface">GigabitEthernet2/0</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">1</td>
+            <td class="actual">None</td>
+            <td><span class="sev-label">MEDIUM</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="trunk native vlan gigabitethernet0/1 sw1-access">
+            <td class="rule">Trunk native VLAN</td>
+            <td class="interface">GigabitEthernet0/1</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">99</td>
+            <td class="actual">99</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="trunk native vlan gigabitethernet0/2 sw1-access">
+            <td class="rule">Trunk native VLAN</td>
+            <td class="interface">GigabitEthernet0/2</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">99</td>
+            <td class="actual">99</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="approved trunk vlans gigabitethernet0/1 sw1-access">
+            <td class="rule">Approved trunk VLANs</td>
+            <td class="interface">GigabitEthernet0/1</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">[10, 20, 30, 40, 50, 99]</td>
+            <td class="actual">[10, 20, 30, 40, 50, 99]</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="approved trunk vlans gigabitethernet0/2 sw1-access">
+            <td class="rule">Approved trunk VLANs</td>
+            <td class="interface">GigabitEthernet0/2</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">[10, 20, 30, 40, 50, 99]</td>
+            <td class="actual">[10, 20, 30, 40, 50, 99]</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet0/0 sw1-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet0/0</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet0/3 sw1-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet0/3</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet1/0 sw1-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet1/0</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet1/1 sw1-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet1/1</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet1/2 sw1-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet1/2</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet1/3 sw1-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet1/3</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet2/0 sw1-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet2/0</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet2/1 sw1-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet2/1</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet2/2 sw1-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet2/2</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet2/3 sw1-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet2/3</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet3/0 sw1-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet3/0</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet3/1 sw1-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet3/1</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet3/2 sw1-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet3/2</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet3/3 sw1-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet3/3</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown vlan10 sw1-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">Vlan10</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </details>
+    
+    <details class="device" open>
+      <summary>
+        <span class="device-name">SW2-ACCESS</span>
+        <span class="device-tally">18 passed · 22 failed</span>
+        <span class="device-score band-poor">45.0%</span>
+      </summary>
+      <table class="checks" data-device="SW2-ACCESS">
+        <thead>
+          <tr>
+            <th>Rule</th>
+            <th>Interface</th>
+            <th>Status</th>
+            <th>Expected</th>
+            <th>Actual</th>
+            <th>Severity</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="hostname  sw2-access">
+            <td class="rule">Hostname</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">SW2-ACCESS</td>
+            <td class="actual">SW2-ACCESS</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="ssh enabled  sw2-access">
+            <td class="rule">SSH enabled</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">True</td>
+            <td class="actual">True</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="CRITICAL"
+              data-search="telnet disabled  sw2-access">
+            <td class="rule">Telnet disabled</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">False</td>
+            <td class="actual">False</td>
+            <td><span class="sev-label">CRITICAL</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="password encryption  sw2-access">
+            <td class="rule">Password encryption</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">True</td>
+            <td class="actual">True</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="privileged local administrator  sw2-access">
+            <td class="rule">Privileged local administrator</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">True</td>
+            <td class="actual">True</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="MEDIUM"
+              data-search="ntp configured  sw2-access">
+            <td class="rule">NTP configured</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">True</td>
+            <td class="actual">True</td>
+            <td><span class="sev-label">MEDIUM</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="MEDIUM"
+              data-search="logging configured  sw2-access">
+            <td class="rule">Logging configured</td>
+            <td class="interface">—</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">True</td>
+            <td class="actual">True</td>
+            <td><span class="sev-label">MEDIUM</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="vlan 1 not used on user port gigabitethernet0/0 sw2-access">
+            <td class="rule">VLAN 1 not used on user port</td>
+            <td class="interface">GigabitEthernet0/0</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">VLAN other than 1</td>
+            <td class="actual">VLAN 40</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="vlan 1 not used on user port gigabitethernet0/2 sw2-access">
+            <td class="rule">VLAN 1 not used on user port</td>
+            <td class="interface">GigabitEthernet0/2</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">VLAN other than 1</td>
+            <td class="actual">VLAN 20</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="vlan 1 not used on user port gigabitethernet0/3 sw2-access">
+            <td class="rule">VLAN 1 not used on user port</td>
+            <td class="interface">GigabitEthernet0/3</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">VLAN other than 1</td>
+            <td class="actual">VLAN 50</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="vlan 1 not used on user port gigabitethernet1/0 sw2-access">
+            <td class="rule">VLAN 1 not used on user port</td>
+            <td class="interface">GigabitEthernet1/0</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">VLAN other than 1</td>
+            <td class="actual">VLAN 40</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="vlan 1 not used on user port gigabitethernet1/1 sw2-access">
+            <td class="rule">VLAN 1 not used on user port</td>
+            <td class="interface">GigabitEthernet1/1</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">VLAN other than 1</td>
+            <td class="actual">VLAN 30</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="port security enabled gigabitethernet0/0 sw2-access">
+            <td class="rule">Port security enabled</td>
+            <td class="interface">GigabitEthernet0/0</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">True</td>
+            <td class="actual">True</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="port security enabled gigabitethernet0/2 sw2-access">
+            <td class="rule">Port security enabled</td>
+            <td class="interface">GigabitEthernet0/2</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">True</td>
+            <td class="actual">False</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="port security enabled gigabitethernet0/3 sw2-access">
+            <td class="rule">Port security enabled</td>
+            <td class="interface">GigabitEthernet0/3</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">True</td>
+            <td class="actual">True</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="port security enabled gigabitethernet1/0 sw2-access">
+            <td class="rule">Port security enabled</td>
+            <td class="interface">GigabitEthernet1/0</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">True</td>
+            <td class="actual">True</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="port security enabled gigabitethernet1/1 sw2-access">
+            <td class="rule">Port security enabled</td>
+            <td class="interface">GigabitEthernet1/1</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">True</td>
+            <td class="actual">True</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #8a7530;"
+              data-status="fail"
+              data-severity="MEDIUM"
+              data-search="maximum mac addresses gigabitethernet0/0 sw2-access">
+            <td class="rule">Maximum MAC addresses</td>
+            <td class="interface">GigabitEthernet0/0</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">1</td>
+            <td class="actual">None</td>
+            <td><span class="sev-label">MEDIUM</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #8a7530;"
+              data-status="fail"
+              data-severity="MEDIUM"
+              data-search="maximum mac addresses gigabitethernet0/2 sw2-access">
+            <td class="rule">Maximum MAC addresses</td>
+            <td class="interface">GigabitEthernet0/2</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">1</td>
+            <td class="actual">None</td>
+            <td><span class="sev-label">MEDIUM</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #8a7530;"
+              data-status="fail"
+              data-severity="MEDIUM"
+              data-search="maximum mac addresses gigabitethernet0/3 sw2-access">
+            <td class="rule">Maximum MAC addresses</td>
+            <td class="interface">GigabitEthernet0/3</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">1</td>
+            <td class="actual">None</td>
+            <td><span class="sev-label">MEDIUM</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #8a7530;"
+              data-status="fail"
+              data-severity="MEDIUM"
+              data-search="maximum mac addresses gigabitethernet1/0 sw2-access">
+            <td class="rule">Maximum MAC addresses</td>
+            <td class="interface">GigabitEthernet1/0</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">1</td>
+            <td class="actual">None</td>
+            <td><span class="sev-label">MEDIUM</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #8a7530;"
+              data-status="fail"
+              data-severity="MEDIUM"
+              data-search="maximum mac addresses gigabitethernet1/1 sw2-access">
+            <td class="rule">Maximum MAC addresses</td>
+            <td class="interface">GigabitEthernet1/1</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">1</td>
+            <td class="actual">None</td>
+            <td><span class="sev-label">MEDIUM</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="trunk native vlan gigabitethernet0/1 sw2-access">
+            <td class="rule">Trunk native VLAN</td>
+            <td class="interface">GigabitEthernet0/1</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">99</td>
+            <td class="actual">99</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="pass"
+              style=""
+              data-status="pass"
+              data-severity="HIGH"
+              data-search="approved trunk vlans gigabitethernet0/1 sw2-access">
+            <td class="rule">Approved trunk VLANs</td>
+            <td class="interface">GigabitEthernet0/1</td>
+            <td><span class="status-badge pass">✓ pass</span></td>
+            <td class="expected">[10, 20, 30, 40, 50, 99]</td>
+            <td class="actual">[10, 20, 30, 40, 50, 99]</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet0/0 sw2-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet0/0</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet0/2 sw2-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet0/2</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet0/3 sw2-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet0/3</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet1/0 sw2-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet1/0</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet1/1 sw2-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet1/1</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet1/2 sw2-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet1/2</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet1/3 sw2-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet1/3</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet2/0 sw2-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet2/0</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet2/1 sw2-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet2/1</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet2/2 sw2-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet2/2</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet2/3 sw2-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet2/3</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet3/0 sw2-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet3/0</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet3/1 sw2-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet3/1</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet3/2 sw2-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet3/2</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown gigabitethernet3/3 sw2-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">GigabitEthernet3/3</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+          <tr class="fail"
+              style="--row-sev: #a85c2e;"
+              data-status="fail"
+              data-severity="HIGH"
+              data-search="unused ports shutdown vlan10 sw2-access">
+            <td class="rule">Unused ports shutdown</td>
+            <td class="interface">Vlan10</td>
+            <td><span class="status-badge fail">✗ fail</span></td>
+            <td class="expected">shutdown</td>
+            <td class="actual">active</td>
+            <td><span class="sev-label">HIGH</span></td>
+          </tr>
+          
+        </tbody>
+      </table>
+    </details>
+    
+  </section>
+
+  <footer>
+    Generated by the compliance framework's report module · data collected via live SSH (Netmiko) for R1-CORE, SW1-ACCESS, SW2-ACCESS; file-based for R2-ISP
+  </footer>
+
+</main>
+
+<script>
+(function () {
+  var searchBox = document.getElementById('search-box');
+  var toggles = document.querySelectorAll('.sev-toggle');
+  var rows = document.querySelectorAll('table.checks tbody tr');
+  var visibleCountEl = document.getElementById('visible-count');
+
+  var state = { search: '', statusFail: false, severities: new Set() };
+
+  function apply() {
+    var visible = 0;
+    rows.forEach(function (row) {
+      var matchesSearch = !state.search || row.getAttribute('data-search').indexOf(state.search) !== -1;
+      var matchesStatus = !state.statusFail || row.getAttribute('data-status') === 'fail';
+      var matchesSeverity = state.severities.size === 0 || state.severities.has(row.getAttribute('data-severity'));
+      var show = matchesSearch && matchesStatus && matchesSeverity;
+      row.setAttribute('data-hidden', show ? 'false' : 'true');
+      if (show) visible++;
+    });
+    visibleCountEl.textContent = visible + ' of ' + rows.length + ' checks shown';
+  }
+
+  searchBox.addEventListener('input', function (e) {
+    state.search = e.target.value.trim().toLowerCase();
+    apply();
+  });
+
+  toggles.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var filter = btn.getAttribute('data-filter');
+      var value = btn.getAttribute('data-value');
+      if (filter === 'status') {
+        state.statusFail = !state.statusFail;
+        btn.setAttribute('aria-pressed', state.statusFail ? 'true' : 'false');
+      } else {
+        if (state.severities.has(value)) {
+          state.severities.delete(value);
+          btn.setAttribute('aria-pressed', 'false');
+        } else {
+          state.severities.add(value);
+          btn.setAttribute('aria-pressed', 'true');
+        }
+      }
+      apply();
+    });
+  });
+
+  apply();
+})();
+</script>
+</body>
+</html>
