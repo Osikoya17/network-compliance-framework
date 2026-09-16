@@ -1,5 +1,6 @@
 import shutil
 import yaml
+import sys
 
 from pathlib import Path
 
@@ -10,9 +11,9 @@ from remediation.applier import RemediationApplier
 from remediation.verifier import RemediationVerifier
 
 
-DEVICE_NAME = "SW1-ACCESS"
-LIVE_CONFIG = Path("data/configurations/SW1-ACCESS.txt")
-TEST_CONFIG = Path("data/test_configurations/SW1-ACCESS.txt")
+DEVICE_NAME = sys.argv[1] if len(sys.argv) > 1 else "SW1-ACCESS"
+LIVE_CONFIG = Path(f"data/configurations/{DEVICE_NAME}.txt")
+TEST_CONFIG = Path(f"data/test_configurations/{DEVICE_NAME}.txt")
 
 
 def load_baseline():
