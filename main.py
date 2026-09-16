@@ -2,6 +2,7 @@ import yaml
 
 from parser.config_parser import CiscoConfigParser, load_config
 from compliance.engine import ComplianceEngine
+from collectors.configuration_collector import ConfigurationCollector
 
 
 def load_baseline():
@@ -31,6 +32,10 @@ def scan_device(device, baseline):
     print("\n" + "=" * 60)
     print(f"SCANNING DEVICE: {name}")
     print("=" * 60)
+
+    collector = ConfigurationCollector(device)
+    configuration = collector.collect()
+    collector.save_configuration(configuration)
 
     config_text = load_config(config_file)
 
