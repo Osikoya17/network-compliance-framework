@@ -242,6 +242,14 @@ class CiscoConfigParser:
                 if match:
                     interface["violation_mode"] = match.group(1)
 
+            # Cisco IOS omits "switchport port-security maximum N"
+            # from running-config when N matches the hardware
+            # default (1). If port security is enabled and no
+            # maximum was explicitly configured, the operating
+            # value is the default: 1.
+            if interface["port_security"] and interface["maximum_mac"] is None:
+                interface["maximum_mac"] = 1
+
             interfaces[interface_name] = interface
 
         return interfaces
