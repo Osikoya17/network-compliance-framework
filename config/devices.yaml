@@ -1,7 +1,7 @@
 devices:
   - name: R1-CORE
     type: cisco_ios
-    collection_method: file
+    collection_method: ssh
     host: 192.168.10.1
     username: ola
     password: Admin123!
@@ -17,7 +17,7 @@ devices:
 
   - name: SW1-ACCESS
     type: cisco_ios
-    collection_method: file
+    collection_method: ssh
     host: 192.168.10.2
     username: ola
     password: Admin123!
@@ -25,7 +25,7 @@ devices:
 
   - name: SW2-ACCESS
     type: cisco_ios
-    collection_method: file
+    collection_method: ssh
     host: 192.168.10.3
     username: ola
     password: Admin123!
