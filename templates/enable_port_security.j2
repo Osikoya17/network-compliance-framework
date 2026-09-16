@@ -1,0 +1,6 @@
+interface {{ interface }}
+ switchport port-security
+ switchport port-security maximum {{ maximum_mac }}
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+exit

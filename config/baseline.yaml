@@ -1,0 +1,50 @@
+baseline:
+  security:
+    ssh_required: true
+    ssh_version: 2
+    telnet_allowed: false
+    password_encryption: true
+    local_admin_required: true
+
+  switching:
+    native_vlan: 99
+    vlan1_user_ports: false
+    unused_ports_shutdown: true
+    port_security_required: true
+    maximum_mac_addresses: 1
+
+    access_ports:
+      SW1-ACCESS:
+        - FastEthernet0/1
+        - FastEthernet0/2
+        - FastEthernet0/3
+        - FastEthernet0/4
+        - FastEthernet0/5
+
+      SW2-ACCESS:
+        - FastEthernet0/1
+        - FastEthernet0/2
+        - FastEthernet0/3
+        - FastEthernet0/4
+
+    trunk_ports:
+      SW1-ACCESS:
+        - GigabitEthernet0/1
+        - GigabitEthernet0/2
+
+      SW2-ACCESS:
+        - GigabitEthernet0/1
+
+  management:
+    management_vlan: 10
+    ntp_required: true
+    logging_required: true
+
+  network:
+    approved_vlans:
+      - 10
+      - 20
+      - 30
+      - 40
+      - 50
+      - 99

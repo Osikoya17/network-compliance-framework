@@ -1,0 +1,32 @@
+devices:
+  - name: R1-CORE
+    type: cisco_ios
+    collection_method: file
+    host: 192.168.10.1
+    username: ola
+    password: Admin123!
+    config: data/configurations/R1-CORE.txt
+
+  - name: R2-ISP
+    type: cisco_ios
+    collection_method: file
+    host: 10.0.0.2
+    username: ola
+    password: Admin123!
+    config: data/configurations/R2-ISP.txt
+
+  - name: SW1-ACCESS
+    type: cisco_ios
+    collection_method: file
+    host: 192.168.10.2
+    username: ola
+    password: Admin123!
+    config: data/configurations/SW1-ACCESS.txt
+
+  - name: SW2-ACCESS
+    type: cisco_ios
+    collection_method: file
+    host: 192.168.10.3
+    username: ola
+    password: Admin123!
+    config: data/configurations/SW2-ACCESS.txt
