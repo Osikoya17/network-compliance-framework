@@ -273,18 +273,35 @@ class ComplianceEngine:
             .get(device_name, [])
         )
 
+        # The physical parent of a router-on-a-stick subinterface
+        # (e.g. GigabitEthernet0/0 is the parent of GigabitEthernet0/0.10)
+        # carries no IP or switchport config of its own, but is in active
+        # use because of its subinterfaces.
+        subinterface_parents = {
+            name.split(".")[0]
+            for name in interfaces
+            if "." in name
+        }
+
         for name, interface in interfaces.items():
 
             # Ignore trunk interfaces
             if interface["mode"] == "trunk":
                 continue
 
+            # Ignore routed interfaces: subinterfaces, SVIs, and
+            # point-to-point links carry an IP address and are not
+            # "unused physical ports" in the sense this rule checks.
+            if interface["routed"]:
+                continue
+
+            # Ignore the physical parent of an active subinterface.
+            if name in subinterface_parents:
+                continue
+
             # Ignore interfaces we expect to use
             if name in expected_access_ports:
                 continue
-
-            # If an unexpected interface is active,
-            # it violates the baseline.
 
             if not interface["shutdown"]:
 

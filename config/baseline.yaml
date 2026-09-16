@@ -15,17 +15,17 @@ baseline:
 
     access_ports:
       SW1-ACCESS:
-        - FastEthernet0/1
-        - FastEthernet0/2
-        - FastEthernet0/3
-        - FastEthernet0/4
-        - FastEthernet0/5
+        - GigabitEthernet0/0
+        - GigabitEthernet0/3
+        - GigabitEthernet1/0
+        - GigabitEthernet1/1
 
       SW2-ACCESS:
-        - FastEthernet0/1
-        - FastEthernet0/2
-        - FastEthernet0/3
-        - FastEthernet0/4
+        - GigabitEthernet0/0
+        - GigabitEthernet0/2
+        - GigabitEthernet0/3
+        - GigabitEthernet1/0
+        - GigabitEthernet1/1
 
     trunk_ports:
       SW1-ACCESS:

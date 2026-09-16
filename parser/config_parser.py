@@ -119,6 +119,7 @@ class CiscoConfigParser:
                 "maximum_mac": None,
                 "sticky_mac": False,
                 "violation_mode": None,
+                "routed": False,
             }
 
             for line in lines[1:]:
@@ -193,6 +194,13 @@ class CiscoConfigParser:
 
                 if line == "shutdown":
                     interface["shutdown"] = True
+
+                # ---------------------------------------------
+                # ROUTED INTERFACE (carries an IP address)
+                # ---------------------------------------------
+
+                if re.match(r"ip address\s+\S+", line):
+                    interface["routed"] = True
 
                 # ---------------------------------------------
                 # PORT SECURITY
