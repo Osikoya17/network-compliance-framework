@@ -84,7 +84,8 @@ class ConfigurationCollector:
             print("SSH connection established.")
 
             configuration = connection.send_command(
-                "show running-config"
+                "show running-config",
+                read_timeout=60
             )
 
             return configuration
