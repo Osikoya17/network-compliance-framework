@@ -9,6 +9,7 @@ from compliance.engine import ComplianceEngine
 from remediation.generator import RemediationGenerator
 from remediation.applier import RemediationApplier
 from remediation.verifier import RemediationVerifier
+from webreport.report_generator import generate_remediation_report
 
 
 DEVICE_NAME = sys.argv[1] if len(sys.argv) > 1 else "SW1-ACCESS"
@@ -100,6 +101,15 @@ def main():
     print("\n" + "-" * 60)
     print(f"BEFORE: {before_score}%   →   AFTER: {after_score}%")
     print("-" * 60)
+
+    generate_remediation_report(
+        device_name=DEVICE_NAME,
+        before_results=before_results,
+        before_score=before_score,
+        after_results=after_results,
+        after_score=after_score,
+        method="file-based test copy",
+    )
 
 
 if __name__ == "__main__":

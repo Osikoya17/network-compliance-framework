@@ -1,15 +1,26 @@
 """
-Generates a self-contained HTML compliance report from a completed scan.
-No server, no external dependencies at view-time -- open the output file
-directly in any browser (works fully offline, safe for a defense demo).
+Generates self-contained HTML reports from a completed scan or a
+remediation cycle. No server, no external dependencies at view-time --
+open the output file directly in any browser (works fully offline,
+safe for a defense demo).
 
 Usage (from main.py), after building `all_results`:
 
     from webreport.report_generator import generate_report
     generate_report(all_results)
 
-`all_results` is the same list main.py already builds:
-    [{"device": name, "score": score, "results": [ComplianceResult, ...]}, ...]
+Usage (from a remediation cycle script), after collecting before/after
+ComplianceResult lists for one device:
+
+    from webreport.report_generator import generate_remediation_report
+    generate_remediation_report(
+        device_name="SW1-ACCESS",
+        before_results=before_results,
+        before_score=before_score,
+        after_results=after_results,
+        after_score=after_score,
+        method="live SSH (Netmiko)",
+    )
 """
 from datetime import datetime
 from pathlib import Path
@@ -106,5 +117,77 @@ def generate_report(
     latest_path.write_text(html, encoding="utf-8")
 
     print(f"\nHTML report written to {timestamped_path} (and reports/latest.html)")
+
+    return timestamped_path
+
+
+def _key(result):
+    return (result.rule, result.interface)
+
+
+def generate_remediation_report(
+    device_name,
+    before_results,
+    before_score,
+    after_results,
+    after_score,
+    method="",
+):
+    """
+    Writes reports/remediation_<device>_<timestamp>.html and
+    reports/remediation_<device>_latest.html, showing which violations
+    were resolved and which still need a manual fix.
+
+    before_results / after_results: the ComplianceResult lists returned
+    by ComplianceEngine.run_all_checks() for the same device, before and
+    after applying remediation. Matched by (rule, interface).
+    """
+    after_by_key = {_key(r): r.status for r in after_results}
+
+    resolved = []
+    still_failing = []
+    already_compliant_count = 0
+
+    for r in before_results:
+        if r.status == "PASS":
+            already_compliant_count += 1
+            continue
+
+        after_status = after_by_key.get(_key(r))
+        entry = _serialize_check(r)
+
+        if after_status == "PASS":
+            resolved.append(entry)
+        else:
+            still_failing.append(entry)
+
+    before_band, _ = _band(before_score)
+    after_band, _ = _band(after_score)
+
+    env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)))
+    template = env.get_template("remediation_template.html.j2")
+
+    html = template.render(
+        device_name=device_name,
+        generated_at=datetime.now().strftime("%A, %d %B %Y %H:%M"),
+        method=method or "not specified",
+        before_score=before_score,
+        after_score=after_score,
+        before_band=before_band,
+        after_band=after_band,
+        resolved=resolved,
+        still_failing=still_failing,
+        already_compliant_count=already_compliant_count,
+    )
+
+    OUTPUT_DIR.mkdir(exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamped_path = OUTPUT_DIR / f"remediation_{device_name}_{timestamp}.html"
+    latest_path = OUTPUT_DIR / f"remediation_{device_name}_latest.html"
+
+    timestamped_path.write_text(html, encoding="utf-8")
+    latest_path.write_text(html, encoding="utf-8")
+
+    print(f"\nRemediation report written to {timestamped_path} (and {latest_path})")
 
     return timestamped_path
