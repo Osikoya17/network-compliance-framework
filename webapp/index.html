@@ -20,11 +20,20 @@
     --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   }
 
+  :root[data-theme="dark"] {
+    --bg: #0f0f0f;
+    --text: #f0f0f0;
+    --text-secondary: #a0a0a0;
+    --border: #333;
+    --border-strong: #4a4a4a;
+  }
+
   * { box-sizing: border-box; }
 
   html, body {
     margin: 0;
     height: 100%;
+    overflow: hidden;
     background: var(--bg);
     color: var(--text);
     font-family: var(--font-sans);
@@ -48,8 +57,6 @@
     display: flex;
     flex-direction: column;
     height: 100vh;
-    position: sticky;
-    top: 0;
   }
 
   .sidebar-header {
@@ -159,7 +166,7 @@
 
   .btn-primary {
     background: var(--text);
-    color: #fff;
+    color: var(--bg);
     border: 1px solid var(--text);
     padding: 9px 18px;
     font-size: 13.5px;
@@ -169,7 +176,7 @@
   .btn-primary:disabled { opacity: .5; cursor: default; }
 
   .btn-small {
-    background: #fff;
+    background: var(--bg);
     color: var(--text);
     border: 1px solid var(--border-strong);
     padding: 5px 10px;
@@ -178,9 +185,14 @@
     cursor: pointer;
   }
   .btn-small:hover { background: #f2f2f2; }
-  .btn-small:disabled { opacity: .5; cursor: default; background: #fff; }
+  .btn-small:disabled { opacity: .5; cursor: default; background: var(--bg); }
 
-  .content { padding: 24px 28px 64px; }
+  .content {
+    padding: 24px 28px 64px;
+    overflow-y: auto;
+    height: 100vh;
+    box-sizing: border-box;
+  }
 
   #scan-log {
     font-size: 12.5px;
@@ -305,7 +317,7 @@
     font-family: var(--font-sans);
     font-size: 13.5px;
     color: var(--text);
-    background: #fff;
+    background: var(--bg);
   }
   .filters input[type="search"]:focus,
   .sev-toggle:focus-visible {
@@ -316,13 +328,13 @@
     font-family: var(--font-sans);
     font-size: 13px;
     padding: 6px 10px;
-    background: #fff;
+    background: var(--bg);
     border: 1px solid var(--border-strong);
     color: var(--text-secondary);
     cursor: pointer;
   }
   .sev-toggle[aria-pressed="true"] {
-    color: #fff;
+    color: var(--bg);
     border-color: var(--text);
     background: var(--text);
   }
@@ -347,7 +359,7 @@
     padding: 10px 14px;
     border-bottom: 1px solid var(--border);
     font-size: 12.5px;
-    background: #fff;
+    background: var(--bg);
     position: sticky;
     top: 0;
   }
@@ -381,7 +393,7 @@
   .btn-remediate {
     font-size: 11px;
     padding: 4px 9px;
-    background: #fff;
+    background: var(--bg);
     border: 1px solid var(--border-strong);
     color: var(--text);
     cursor: pointer;
@@ -417,7 +429,10 @@
   <div class="main">
     <div class="topbar">
       <div class="breadcrumb">Dashboard / Overview</div>
-      <button class="btn-primary" id="run-full-scan">Run Full Scan</button>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <button class="btn-small" id="theme-toggle">Dark</button>
+        <button class="btn-primary" id="run-full-scan">Run Full Scan</button>
+      </div>
     </div>
 
     <div class="content">
@@ -917,6 +932,12 @@
   }
 
   function remediateDevice(name, triggerBtn) {
+    var confirmed = window.confirm(
+      "Apply remediation to " + name + "? This modifies a test copy of " +
+      "the configuration file, not the live device."
+    );
+    if (!confirmed) return;
+
     if (triggerBtn) {
       triggerBtn.disabled = true;
       triggerBtn.textContent = "Remediating…";
@@ -960,6 +981,31 @@
         return null;
       });
   }
+
+  // -----------------------------------------------------------
+  // Theme toggle
+  // -----------------------------------------------------------
+
+  var THEME_STORAGE_KEY = "compliance-dashboard-theme";
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    var toggleBtn = document.getElementById("theme-toggle");
+    toggleBtn.textContent = theme === "dark" ? "Light" : "Dark";
+  }
+
+  document.getElementById("theme-toggle").addEventListener("click", function () {
+    var current = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+    var next = current === "dark" ? "light" : "dark";
+    applyTheme(next);
+    try { localStorage.setItem(THEME_STORAGE_KEY, next); } catch (e) {}
+  });
+
+  (function initTheme() {
+    var saved = null;
+    try { saved = localStorage.getItem(THEME_STORAGE_KEY); } catch (e) {}
+    applyTheme(saved === "dark" ? "dark" : "light");
+  })();
 
   document.getElementById("run-full-scan").addEventListener("click", function () {
     var btn = this;
