@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Network Compliance Dashboard</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #1a1a1a;
+    --text-secondary: #5a5a5a;
+    --border: #d8d8d8;
+    --border-strong: #b8b8b8;
+    --pass: #2f6f4e;
+    --sev-critical: #8b2e2e;
+    --sev-high: #a85c2e;
+    --sev-medium: #8a7530;
+    --sev-low: #6b6b6b;
+    --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body { display: flex; min-height: 100vh; }
+
+  a { color: inherit; }
+
+  /* ---------------------------------------------------------- */
+  /* Sidebar */
+  /* ---------------------------------------------------------- */
+
+  .sidebar {
+    width: 240px;
+    flex: 0 0 240px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+  }
+
+  .sidebar-header {
+    padding: 18px 16px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    font-size: 14px;
+  }
+
+  .sidebar-header .sub {
+    font-weight: 400;
+    color: var(--text-secondary);
+    font-size: 12px;
+    margin-top: 2px;
+  }
+
+  .device-list {
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  .device-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+  }
+
+  .device-row:hover { background: #fafafa; }
+  .device-row.active { background: #f2f2f2; }
+
+  .device-row .name {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .device-row .right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .badge {
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    border: 1px solid var(--border-strong);
+    padding: 1px 6px;
+  }
+
+  .badge.not-scanned {
+    color: var(--text-secondary);
+    border-color: var(--border);
+  }
+
+  .badge.band-good { color: var(--pass); border-color: var(--pass); }
+  .badge.band-mid { color: var(--sev-medium); border-color: var(--sev-medium); }
+  .badge.band-poor { color: var(--sev-critical); border-color: var(--sev-critical); }
+
+  .row-action {
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 4px;
+    text-decoration: underline;
+  }
+  .row-action:hover { color: var(--text); }
+
+  .sidebar-footer {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  .sidebar-footer .hostname {
+    font-family: var(--font-mono);
+  }
+
+  /* ---------------------------------------------------------- */
+  /* Main column */
+  /* ---------------------------------------------------------- */
+
+  .main { flex: 1; min-width: 0; }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 28px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .breadcrumb {
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+
+  .btn-primary {
+    background: var(--text);
+    color: #fff;
+    border: 1px solid var(--text);
+    padding: 9px 18px;
+    font-size: 13.5px;
+    font-family: var(--font-sans);
+    cursor: pointer;
+  }
+  .btn-primary:disabled { opacity: .5; cursor: default; }
+
+  .btn-small {
+    background: #fff;
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    padding: 5px 10px;
+    font-size: 12px;
+    font-family: var(--font-sans);
+    cursor: pointer;
+  }
+  .btn-small:hover { background: #f2f2f2; }
+  .btn-small:disabled { opacity: .5; cursor: default; background: #fff; }
+
+  .content { padding: 24px 28px 64px; }
+
+  #scan-log {
+    font-size: 12.5px;
+    font-family: var(--font-mono);
+    color: var(--text-secondary);
+    margin: 0 0 20px;
+    padding: 0;
+    display: none;
+  }
+  #scan-log.visible { display: block; }
+  #scan-log div { padding: 2px 0; }
+  #scan-log .ok { color: var(--pass); }
+  #scan-log .err { color: var(--sev-critical); }
+
+  /* Stat cards */
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border: 1px solid var(--border);
+  }
+  .stat-cell {
+    padding: 18px 20px;
+    border-right: 1px solid var(--border);
+  }
+  .stat-cell:last-child { border-right: none; }
+  .stat-cell .value {
+    font-size: 28px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+  .stat-cell .label {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-top: 6px;
+  }
+  .band-good { color: var(--pass); }
+  .band-mid { color: var(--sev-medium); }
+  .band-poor { color: var(--sev-critical); }
+
+  /* Panels */
+  .panels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: 1px solid var(--border);
+    border-top: none;
+  }
+  .panel { padding: 18px 20px; }
+  .panel:first-child { border-right: 1px solid var(--border); }
+  .panel h2 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin: 0 0 14px;
+  }
+  .panel .empty {
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+
+  .bar-row {
+    display: grid;
+    grid-template-columns: 96px 1fr 48px;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .bar-row:first-child { border-top: 1px solid var(--border); }
+  .bar-row .row-label {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .bar-track {
+    height: 10px;
+    border: 1px solid var(--border-strong);
+    background: #fafafa;
+    position: relative;
+  }
+  .bar-fill { height: 100%; }
+  .bar-fill.band-good { background: var(--pass); }
+  .bar-fill.band-mid { background: var(--sev-medium); }
+  .bar-fill.band-poor { background: var(--sev-critical); }
+  .bar-row .row-value {
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+
+  .sev-row .bar-fill { background: var(--sev-low); }
+  .sev-row.sev-CRITICAL .bar-fill { background: var(--sev-critical); }
+  .sev-row.sev-HIGH .bar-fill { background: var(--sev-high); }
+  .sev-row.sev-MEDIUM .bar-fill { background: var(--sev-medium); }
+  .sev-row.sev-LOW .bar-fill { background: var(--sev-low); }
+
+  /* Filters */
+  section { margin-top: 28px; }
+  section > h2 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin: 0 0 16px;
+  }
+
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    border: 1px solid var(--border);
+    padding: 12px 14px;
+  }
+  .filters input[type="search"] {
+    flex: 1;
+    min-width: 180px;
+    border: 1px solid var(--border-strong);
+    padding: 7px 10px;
+    font-family: var(--font-sans);
+    font-size: 13.5px;
+    color: var(--text);
+    background: #fff;
+  }
+  .filters input[type="search"]:focus,
+  .sev-toggle:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 1px;
+  }
+  .sev-toggle {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    padding: 6px 10px;
+    background: #fff;
+    border: 1px solid var(--border-strong);
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .sev-toggle[aria-pressed="true"] {
+    color: #fff;
+    border-color: var(--text);
+    background: var(--text);
+  }
+  .filters .count {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-left: auto;
+  }
+
+  /* Results table */
+  table.checks {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+    border: 1px solid var(--border);
+    border-top: none;
+  }
+  table.checks th {
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12.5px;
+    background: #fff;
+    position: sticky;
+    top: 0;
+  }
+  table.checks td {
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  table.checks tr:last-child td { border-bottom: none; }
+  table.checks td.rule { max-width: 240px; }
+  table.checks td.device,
+  table.checks td.interface,
+  table.checks td.expected,
+  table.checks td.actual {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+  table.checks tr.fail td.rule { border-left: 3px solid var(--row-sev, var(--sev-high)); padding-left: 11px; }
+  table.checks tr.pass td.rule { border-left: 3px solid transparent; padding-left: 11px; }
+
+  .status-badge { font-size: 12px; font-weight: 600; }
+  .status-badge.pass { color: var(--pass); }
+  .status-badge.fail { color: var(--row-sev, var(--sev-high)); }
+
+  .sev-label { font-size: 12px; color: var(--text-secondary); }
+
+  tr[data-hidden="true"] { display: none; }
+
+  .btn-remediate {
+    font-size: 11px;
+    padding: 4px 9px;
+    background: #fff;
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    cursor: pointer;
+    font-family: var(--font-sans);
+    white-space: nowrap;
+  }
+  .btn-remediate:hover { background: #f2f2f2; }
+  .btn-remediate:disabled { opacity: .5; cursor: default; }
+
+  .empty-state {
+    padding: 40px 14px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 13.5px;
+    border: 1px solid var(--border);
+    border-top: none;
+  }
+</style>
+</head>
+<body>
+
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      Devices
+      <div class="sub" id="sidebar-sub"></div>
+    </div>
+    <div class="device-list" id="device-list"></div>
+    <div class="sidebar-footer">
+      Running on <span class="hostname" id="hostname-label"></span>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="breadcrumb">Dashboard / Overview</div>
+      <button class="btn-primary" id="run-full-scan">Run Full Scan</button>
+    </div>
+
+    <div class="content">
+
+      <div id="scan-log"></div>
+
+      <section class="overview" style="margin-top:0;">
+        <div class="stat-row">
+          <div class="stat-cell">
+            <div class="value" id="stat-overall-score">—</div>
+            <div class="label">Overall network score</div>
+          </div>
+          <div class="stat-cell">
+            <div class="value" id="stat-devices-scanned">0</div>
+            <div class="label">Devices scanned</div>
+          </div>
+          <div class="stat-cell">
+            <div class="value" id="stat-checks-passed">0</div>
+            <div class="label">Checks passed</div>
+          </div>
+          <div class="stat-cell">
+            <div class="value" id="stat-checks-failed">0</div>
+            <div class="label">Checks failed</div>
+          </div>
+        </div>
+
+        <div class="panels">
+          <div class="panel">
+            <h2>Score by device</h2>
+            <div id="panel-score-by-device"></div>
+          </div>
+          <div class="panel">
+            <h2>Checks by severity</h2>
+            <div id="panel-severity"></div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Results by device</h2>
+        <div class="filters" id="filters">
+          <input type="search" id="search-box" placeholder="Search rule, interface, device…" aria-label="Search checks">
+          <button class="sev-toggle" data-filter="status" data-value="fail" aria-pressed="false">Failing only</button>
+          <button class="sev-toggle" data-filter="severity" data-value="CRITICAL" aria-pressed="false">Critical</button>
+          <button class="sev-toggle" data-filter="severity" data-value="HIGH" aria-pressed="false">High</button>
+          <button class="sev-toggle" data-filter="severity" data-value="MEDIUM" aria-pressed="false">Medium</button>
+          <button class="sev-toggle" data-filter="severity" data-value="LOW" aria-pressed="false">Low</button>
+          <span class="count" id="visible-count"></span>
+        </div>
+
+        <table class="checks" id="results-table">
+          <thead>
+            <tr>
+              <th>Rule</th>
+              <th>Interface</th>
+              <th>Device</th>
+              <th>Status</th>
+              <th>Expected</th>
+              <th>Actual</th>
+              <th>Severity</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="results-tbody"></tbody>
+        </table>
+        <div class="empty-state" id="results-empty" style="display:none;">
+          No scans yet. Click "Run Full Scan" or scan a device from the sidebar.
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+
+  var INITIAL_STATE = __INITIAL_STATE_JSON__;
+
+  var SEV_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
+
+  // devices: name -> { name, host, collection_method, scanned, score, results: [] }
+  var devices = {};
+  var deviceOrder = [];
+
+  INITIAL_STATE.devices.forEach(function (d) {
+    devices[d.name] = d;
+    deviceOrder.push(d.name);
+  });
+
+  document.getElementById("hostname-label").textContent = INITIAL_STATE.hostname;
+  document.getElementById("sidebar-sub").textContent = deviceOrder.length + " configured";
+
+  // -----------------------------------------------------------
+  // Banding (matches webreport/template.html.j2)
+  // -----------------------------------------------------------
+
+  function band(score) {
+    if (score >= 90) return "band-good";
+    if (score >= 70) return "band-mid";
+    return "band-poor";
+  }
+
+  // -----------------------------------------------------------
+  // Sidebar
+  // -----------------------------------------------------------
+
+  function renderSidebar() {
+    var list = document.getElementById("device-list");
+    list.innerHTML = "";
+
+    deviceOrder.forEach(function (name) {
+      var d = devices[name];
+
+      var row = document.createElement("div");
+      row.className = "device-row";
+      row.setAttribute("data-device", name);
+
+      var left = document.createElement("div");
+      left.className = "name";
+      left.textContent = name;
+
+      var right = document.createElement("div");
+      right.className = "right";
+
+      var badge = document.createElement("span");
+      if (d.scanned) {
+        badge.className = "badge " + band(d.score);
+        badge.textContent = d.score + "%";
+      } else {
+        badge.className = "badge not-scanned";
+        badge.textContent = "not scanned";
+      }
+
+      var scanBtn = document.createElement("button");
+      scanBtn.className = "row-action";
+      scanBtn.textContent = "Scan";
+      scanBtn.title = "Scan " + name;
+      scanBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        scanDevice(name);
+      });
+
+      right.appendChild(badge);
+      right.appendChild(scanBtn);
+
+      row.appendChild(left);
+      row.appendChild(right);
+
+      row.addEventListener("click", function () {
+        focusDevice(name);
+      });
+
+      list.appendChild(row);
+    });
+  }
+
+  function focusDevice(name) {
+    document.querySelectorAll(".device-row").forEach(function (row) {
+      row.classList.toggle("active", row.getAttribute("data-device") === name);
+    });
+    var searchBox = document.getElementById("search-box");
+    searchBox.value = name;
+    state.search = name.toLowerCase();
+    applyFilter();
+    document.getElementById("results-table").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // -----------------------------------------------------------
+  // Stat cards + panels
+  // -----------------------------------------------------------
+
+  function scannedDeviceNames() {
+    return deviceOrder.filter(function (name) { return devices[name].scanned; });
+  }
+
+  function renderStats() {
+    var scanned = scannedDeviceNames();
+
+    var overallEl = document.getElementById("stat-overall-score");
+    if (scanned.length === 0) {
+      overallEl.textContent = "—";
+      overallEl.className = "value";
+    } else {
+      var total = scanned.reduce(function (sum, name) { return sum + devices[name].score; }, 0);
+      var overall = Math.round((total / scanned.length) * 100) / 100;
+      overallEl.textContent = overall + "%";
+      overallEl.className = "value " + band(overall);
+    }
+
+    document.getElementById("stat-devices-scanned").textContent = scanned.length + " / " + deviceOrder.length;
+
+    var passed = 0, failed = 0;
+    scanned.forEach(function (name) {
+      devices[name].results.forEach(function (r) {
+        if (r.status === "PASS") passed++; else failed++;
+      });
+    });
+
+    document.getElementById("stat-checks-passed").textContent = passed;
+    var failedEl = document.getElementById("stat-checks-failed");
+    failedEl.textContent = failed;
+    failedEl.className = "value " + (failed > 0 ? "band-poor" : "");
+  }
+
+  function renderScoreByDevicePanel() {
+    var container = document.getElementById("panel-score-by-device");
+    var scanned = scannedDeviceNames();
+
+    if (scanned.length === 0) {
+      container.innerHTML = '<div class="empty">No devices scanned yet.</div>';
+      return;
+    }
+
+    container.innerHTML = "";
+    deviceOrder.forEach(function (name) {
+      var d = devices[name];
+      if (!d.scanned) return;
+
+      var row = document.createElement("div");
+      row.className = "bar-row";
+
+      var label = document.createElement("div");
+      label.className = "row-label";
+      label.textContent = name;
+
+      var track = document.createElement("div");
+      track.className = "bar-track";
+      var fill = document.createElement("div");
+      fill.className = "bar-fill " + band(d.score);
+      fill.style.width = d.score + "%";
+      track.appendChild(fill);
+
+      var value = document.createElement("div");
+      value.className = "row-value";
+      value.textContent = d.score + "%";
+
+      row.appendChild(label);
+      row.appendChild(track);
+      row.appendChild(value);
+      container.appendChild(row);
+    });
+  }
+
+  function renderSeverityPanel() {
+    var container = document.getElementById("panel-severity");
+    var scanned = scannedDeviceNames();
+
+    if (scanned.length === 0) {
+      container.innerHTML = '<div class="empty">No devices scanned yet.</div>';
+      return;
+    }
+
+    var counts = {};
+    var fails = {};
+    SEV_ORDER.forEach(function (s) { counts[s] = 0; fails[s] = 0; });
+
+    scanned.forEach(function (name) {
+      devices[name].results.forEach(function (r) {
+        if (!(r.severity in counts)) { counts[r.severity] = 0; fails[r.severity] = 0; }
+        counts[r.severity]++;
+        if (r.status === "FAIL") fails[r.severity]++;
+      });
+    });
+
+    var maxCount = Math.max.apply(null, SEV_ORDER.map(function (s) { return counts[s]; }).concat([1]));
+
+    container.innerHTML = "";
+    SEV_ORDER.forEach(function (sev) {
+      var row = document.createElement("div");
+      row.className = "bar-row sev-row sev-" + sev;
+
+      var label = document.createElement("div");
+      label.className = "row-label";
+      label.textContent = sev;
+
+      var track = document.createElement("div");
+      track.className = "bar-track";
+      var fill = document.createElement("div");
+      fill.className = "bar-fill";
+      var width = counts[sev] === 0 ? 0 : Math.max(4, (counts[sev] / maxCount) * 100);
+      fill.style.width = width + "%";
+      track.appendChild(fill);
+
+      var value = document.createElement("div");
+      value.className = "row-value";
+      value.textContent = fails[sev] + " / " + counts[sev];
+
+      row.appendChild(label);
+      row.appendChild(track);
+      row.appendChild(value);
+      container.appendChild(row);
+    });
+  }
+
+  // -----------------------------------------------------------
+  // Results table (filter logic ported from webreport/template.html.j2)
+  // -----------------------------------------------------------
+
+  var state = { search: "", statusFail: false, severities: new Set() };
+
+  function renderTable() {
+    var tbody = document.getElementById("results-tbody");
+    tbody.innerHTML = "";
+
+    var anyResults = false;
+
+    deviceOrder.forEach(function (name) {
+      var d = devices[name];
+      if (!d.scanned) return;
+
+      d.results.forEach(function (r) {
+        anyResults = true;
+
+        var tr = document.createElement("tr");
+        tr.className = r.status === "FAIL" ? "fail" : "pass";
+        tr.setAttribute("data-status", r.status.toLowerCase());
+        tr.setAttribute("data-severity", r.severity);
+        tr.setAttribute(
+          "data-search",
+          (r.rule + " " + (r.interface || "") + " " + name).toLowerCase()
+        );
+
+        if (r.status === "FAIL") {
+          var sevColor = {
+            CRITICAL: "#8b2e2e",
+            HIGH: "#a85c2e",
+            MEDIUM: "#8a7530",
+            LOW: "#6b6b6b"
+          }[r.severity] || "#a85c2e";
+          tr.style.setProperty("--row-sev", sevColor);
+        }
+
+        var ruleTd = document.createElement("td");
+        ruleTd.className = "rule";
+        ruleTd.textContent = r.rule;
+
+        var ifaceTd = document.createElement("td");
+        ifaceTd.className = "interface";
+        ifaceTd.textContent = r.interface || "—";
+
+        var deviceTd = document.createElement("td");
+        deviceTd.className = "device";
+        deviceTd.textContent = name;
+
+        var statusTd = document.createElement("td");
+        var statusSpan = document.createElement("span");
+        statusSpan.className = "status-badge " + r.status.toLowerCase();
+        statusSpan.textContent = r.status === "PASS" ? "✓ pass" : "✗ fail";
+        statusTd.appendChild(statusSpan);
+
+        var expectedTd = document.createElement("td");
+        expectedTd.className = "expected";
+        expectedTd.textContent = r.expected;
+
+        var actualTd = document.createElement("td");
+        actualTd.className = "actual";
+        actualTd.textContent = r.actual;
+
+        var sevTd = document.createElement("td");
+        var sevSpan = document.createElement("span");
+        sevSpan.className = "sev-label";
+        sevSpan.textContent = r.severity;
+        sevTd.appendChild(sevSpan);
+
+        var actionTd = document.createElement("td");
+        if (r.status === "FAIL") {
+          var btn = document.createElement("button");
+          btn.className = "btn-remediate";
+          btn.textContent = "Remediate";
+          btn.addEventListener("click", function () {
+            remediateDevice(name, btn);
+          });
+          actionTd.appendChild(btn);
+        }
+
+        tr.appendChild(ruleTd);
+        tr.appendChild(ifaceTd);
+        tr.appendChild(deviceTd);
+        tr.appendChild(statusTd);
+        tr.appendChild(expectedTd);
+        tr.appendChild(actualTd);
+        tr.appendChild(sevTd);
+        tr.appendChild(actionTd);
+
+        tbody.appendChild(tr);
+      });
+    });
+
+    document.getElementById("results-empty").style.display = anyResults ? "none" : "block";
+    document.getElementById("results-table").style.display = anyResults ? "table" : "none";
+
+    applyFilter();
+  }
+
+  function applyFilter() {
+    var rows = document.querySelectorAll("table.checks tbody tr");
+    var visible = 0;
+
+    rows.forEach(function (row) {
+      var matchesSearch = !state.search || row.getAttribute("data-search").indexOf(state.search) !== -1;
+      var matchesStatus = !state.statusFail || row.getAttribute("data-status") === "fail";
+      var matchesSeverity = state.severities.size === 0 || state.severities.has(row.getAttribute("data-severity"));
+      var show = matchesSearch && matchesStatus && matchesSeverity;
+      row.setAttribute("data-hidden", show ? "false" : "true");
+      if (show) visible++;
+    });
+
+    document.getElementById("visible-count").textContent = visible + " of " + rows.length + " checks shown";
+  }
+
+  document.getElementById("search-box").addEventListener("input", function (e) {
+    state.search = e.target.value.trim().toLowerCase();
+    applyFilter();
+  });
+
+  document.querySelectorAll(".sev-toggle").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var filter = btn.getAttribute("data-filter");
+      var value = btn.getAttribute("data-value");
+      if (filter === "status") {
+        state.statusFail = !state.statusFail;
+        btn.setAttribute("aria-pressed", state.statusFail ? "true" : "false");
+      } else {
+        if (state.severities.has(value)) {
+          state.severities.delete(value);
+          btn.setAttribute("aria-pressed", "false");
+        } else {
+          state.severities.add(value);
+          btn.setAttribute("aria-pressed", "true");
+        }
+      }
+      applyFilter();
+    });
+  });
+
+  // -----------------------------------------------------------
+  // Rendering entry point
+  // -----------------------------------------------------------
+
+  function renderAll() {
+    renderSidebar();
+    renderStats();
+    renderScoreByDevicePanel();
+    renderSeverityPanel();
+    renderTable();
+  }
+
+  // -----------------------------------------------------------
+  // Scan log
+  // -----------------------------------------------------------
+
+  function logLine(text, cls) {
+    var log = document.getElementById("scan-log");
+    log.classList.add("visible");
+    var line = document.createElement("div");
+    if (cls) line.className = cls;
+    line.textContent = text;
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+    return line;
+  }
+
+  // -----------------------------------------------------------
+  // API calls
+  // -----------------------------------------------------------
+
+  function scanDevice(name) {
+    var line = logLine("Scanning " + name + " … (this can take up to a minute over SSH)");
+
+    return fetch("/scan/" + encodeURIComponent(name), { method: "POST" })
+      .then(function (resp) {
+        return resp.json().then(function (data) { return { ok: resp.ok, data: data }; });
+      })
+      .then(function (result) {
+        if (!result.ok) {
+          line.textContent = "✗ " + name + ": " + (result.data.error || "scan failed");
+          line.className = "err";
+          return null;
+        }
+
+        devices[name].scanned = true;
+        devices[name].score = result.data.score;
+        devices[name].results = result.data.results;
+
+        line.textContent = "✓ " + name + " scanned — " + result.data.score + "%";
+        line.className = "ok";
+
+        renderAll();
+        return result.data;
+      })
+      .catch(function (err) {
+        line.textContent = "✗ " + name + ": " + err;
+        line.className = "err";
+        return null;
+      });
+  }
+
+  function remediateDevice(name, triggerBtn) {
+    if (triggerBtn) {
+      triggerBtn.disabled = true;
+      triggerBtn.textContent = "Remediating…";
+    }
+
+    var line = logLine("Remediating " + name + " …");
+
+    return fetch("/remediate/" + encodeURIComponent(name), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ live: false }),
+    })
+      .then(function (resp) {
+        return resp.json().then(function (data) { return { ok: resp.ok, data: data }; });
+      })
+      .then(function (result) {
+        if (!result.ok) {
+          line.textContent = "✗ " + name + " remediation: " + (result.data.error || "failed");
+          line.className = "err";
+          if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.textContent = "Remediate"; }
+          return null;
+        }
+
+        devices[name].scanned = true;
+        devices[name].score = result.data.after.score;
+        devices[name].results = result.data.after.results;
+
+        line.textContent = (
+          "✓ " + name + " remediated — " + result.data.applied.length +
+          " fix(es) applied: " + result.data.before.score + "% → " + result.data.after.score + "%"
+        );
+        line.className = "ok";
+
+        renderAll();
+        return result.data;
+      })
+      .catch(function (err) {
+        line.textContent = "✗ " + name + " remediation: " + err;
+        line.className = "err";
+        if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.textContent = "Remediate"; }
+        return null;
+      });
+  }
+
+  document.getElementById("run-full-scan").addEventListener("click", function () {
+    var btn = this;
+    btn.disabled = true;
+
+    var names = deviceOrder.slice();
+    var i = 0;
+
+    function next() {
+      if (i >= names.length) {
+        btn.disabled = false;
+        btn.textContent = "Run Full Scan";
+        return;
+      }
+      i++;
+      btn.textContent = "Scanning… (" + i + "/" + names.length + ")";
+      scanDevice(names[i - 1]).then(next);
+    }
+
+    next();
+  });
+
+  renderAll();
+})();
+</script>
+</body>
+</html>
