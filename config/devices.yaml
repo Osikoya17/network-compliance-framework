@@ -1,3 +1,22 @@
+# Adding a new device
+#
+#   (a) Add an entry to the `devices:` list below: name, type,
+#       collection_method (ssh or file), host, username, password,
+#       and a config path (data/configurations/<name>.txt).
+#   (b) If the device is a switch, add an access_ports / trunk_ports
+#       block for it under the `switching:` section of
+#       config/baseline.yaml (see the SW1-ACCESS / SW2-ACCESS entries
+#       there for the pattern). Routers don't need this block.
+#   (c) Nothing else — the dashboard, main.py, and the remediation
+#       pipeline all read this file at request/run time, so the new
+#       device appears automatically, with no code changes.
+#       collection_method: ssh devices are the exception to "nothing
+#       else to prepare": the collector creates/overwrites
+#       data/configurations/<name>.txt itself on the device's first
+#       scan. collection_method: file devices are NOT auto-created —
+#       the file must already exist at that path before the first
+#       scan, or the scan fails with FileNotFoundError.
+#
 devices:
   - name: R1-CORE
     type: cisco_ios

@@ -802,7 +802,7 @@
         if (r.status === "FAIL") {
           var btn = document.createElement("button");
           btn.className = "btn-remediate";
-          btn.textContent = "Remediate";
+          btn.textContent = "Reconfigure";
           btn.addEventListener("click", function () {
             remediateDevice(name, btn);
           });
@@ -933,31 +933,32 @@
 
   function remediateDevice(name, triggerBtn) {
     var confirmed = window.confirm(
-      "Apply remediation to " + name + "? This modifies a test copy of " +
-      "the configuration file, not the live device."
+      "Push these fixes to the LIVE device " + name + " over SSH now? " +
+      "This is a real configuration change, not a test copy, and is not " +
+      "automatically reversible."
     );
     if (!confirmed) return;
 
     if (triggerBtn) {
       triggerBtn.disabled = true;
-      triggerBtn.textContent = "Remediating…";
+      triggerBtn.textContent = "Reconfiguring…";
     }
 
-    var line = logLine("Remediating " + name + " …");
+    var line = logLine("Reconfiguring " + name + " …");
 
     return fetch("/remediate/" + encodeURIComponent(name), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ live: false }),
+      body: JSON.stringify({ live: true }),
     })
       .then(function (resp) {
         return resp.json().then(function (data) { return { ok: resp.ok, data: data }; });
       })
       .then(function (result) {
         if (!result.ok) {
-          line.textContent = "✗ " + name + " remediation: " + (result.data.error || "failed");
+          line.textContent = "✗ " + name + " reconfiguration: " + (result.data.error || "failed");
           line.className = "err";
-          if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.textContent = "Remediate"; }
+          if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.textContent = "Reconfigure"; }
           return null;
         }
 
@@ -966,7 +967,7 @@
         devices[name].results = result.data.after.results;
 
         line.textContent = (
-          "✓ " + name + " remediated — " + result.data.applied.length +
+          "✓ " + name + " reconfigured — " + result.data.applied.length +
           " fix(es) applied: " + result.data.before.score + "% → " + result.data.after.score + "%"
         );
         line.className = "ok";
@@ -975,9 +976,9 @@
         return result.data;
       })
       .catch(function (err) {
-        line.textContent = "✗ " + name + " remediation: " + err;
+        line.textContent = "✗ " + name + " reconfiguration: " + err;
         line.className = "err";
-        if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.textContent = "Remediate"; }
+        if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.textContent = "Reconfigure"; }
         return null;
       });
   }
