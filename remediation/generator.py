@@ -67,6 +67,19 @@ class RemediationGenerator:
                     "maximum_mac": 1
                 }
             )
+        if rule == "SSH enabled":
+            return self.generate(
+                "enable_ssh.j2"
+            )
+
+        if rule == "Privileged local administrator":
+            return self.generate(
+                "enable_local_admin.j2",
+                {
+                    "username": "ola",
+                    "password": "Admin123!"
+                }
+            )
 
         if rule == "Unused ports shutdown":
             return self.generate(

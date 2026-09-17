@@ -50,9 +50,12 @@ class CiscoConfigParser:
         )
 
     def ntp_configured(self):
+        # R2-ISP is the NTP master for this topology and legitimately
+        # has no "ntp server" client line of its own — "ntp master"
+        # satisfies this rule just as validly as being a client.
         return bool(
             re.search(
-                r"^ntp server\s+\S+",
+                r"^ntp (server|master)(\s+\S+)?",
                 self.config,
                 re.MULTILINE
             )

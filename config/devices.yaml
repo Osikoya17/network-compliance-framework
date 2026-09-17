@@ -28,7 +28,7 @@ devices:
 
   - name: R2-ISP
     type: cisco_ios
-    collection_method: file
+    collection_method: ssh
     host: 10.0.0.2
     username: ola
     password: Admin123!
