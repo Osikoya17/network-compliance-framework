@@ -74,6 +74,7 @@ def dashboard():
                     [r.to_dict() for r in last_scan["results"]]
                     if last_scan else []
                 ),
+                "has_remediation": device_state.get("last_remediation") is not None,
             })
 
     initial_state = {
@@ -228,8 +229,53 @@ def remediate(device_name):
     })
 
 
-@app.route("/report/<device_name>")
-def report(device_name):
+@app.route("/report/compliance")
+def report_compliance():
+    with STATE_LOCK:
+        state_snapshot = {
+            name: dict(device_state)
+            for name, device_state in STATE.items()
+        }
+
+    all_results = []
+
+    for device in load_devices():
+        device_state = state_snapshot.get(device["name"], {})
+        last_scan = device_state.get("last_scan")
+
+        if last_scan is None:
+            continue
+
+        all_results.append({
+            "device": device["name"],
+            "score": last_scan["score"],
+            "results": last_scan["results"],
+        })
+
+    if not all_results:
+        return jsonify({
+            "error": "no devices have been scanned yet"
+        }), 400
+
+    path = generate_report(
+        all_results,
+        collection_summary="configured collection methods (see config/devices.yaml)",
+    )
+
+    html = Path(path).read_text(encoding="utf-8")
+    filename = f"compliance_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+
+    return Response(
+        html,
+        mimetype="text/html",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        },
+    )
+
+
+@app.route("/report/remediation/<device_name>")
+def report_remediation(device_name):
     device = _device_by_name(device_name)
 
     if device is None:
@@ -238,41 +284,32 @@ def report(device_name):
     with STATE_LOCK:
         device_state = dict(STATE.get(device_name, {}))
 
-    last_scan = device_state.get("last_scan")
     last_remediation = device_state.get("last_remediation")
 
-    if last_remediation and (
-        not last_scan
-        or last_remediation["timestamp"] >= last_scan["timestamp"]
-    ):
-        path = generate_remediation_report(
-            device_name=device_name,
-            before_results=last_remediation["before_results"],
-            before_score=last_remediation["before_score"],
-            after_results=last_remediation["after_results"],
-            after_score=last_remediation["after_score"],
-            method=last_remediation["method"],
-        )
-    elif last_scan:
-        path = generate_report(
-            [{
-                "device": device_name,
-                "score": last_scan["score"],
-                "results": last_scan["results"],
-            }],
-            collection_summary=(
-                f"{device.get('collection_method', 'file')} collection "
-                f"for {device_name}"
-            ),
-        )
-    else:
+    if last_remediation is None:
         return jsonify({
-            "error": f"No report available for {device_name} yet. Scan it first."
+            "error": f"no remediation has been run for {device_name} yet"
         }), 404
 
-    html = Path(path).read_text(encoding="utf-8")
+    path = generate_remediation_report(
+        device_name=device_name,
+        before_results=last_remediation["before_results"],
+        before_score=last_remediation["before_score"],
+        after_results=last_remediation["after_results"],
+        after_score=last_remediation["after_score"],
+        method=last_remediation["method"],
+    )
 
-    return Response(html, mimetype="text/html")
+    html = Path(path).read_text(encoding="utf-8")
+    filename = f"remediation_{device_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+
+    return Response(
+        html,
+        mimetype="text/html",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        },
+    )
 
 
 if __name__ == "__main__":

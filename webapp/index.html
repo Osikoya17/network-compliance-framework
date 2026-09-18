@@ -78,18 +78,31 @@
     overflow-y: auto;
   }
 
+  .device-entry {
+    border-bottom: 1px solid var(--border);
+  }
+
   .device-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
     padding: 10px 16px;
-    border-bottom: 1px solid var(--border);
     cursor: pointer;
   }
 
   .device-row:hover { background: #fafafa; }
   .device-row.active { background: #f2f2f2; }
+
+  .device-sublink {
+    display: block;
+    padding: 0 16px 10px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .device-sublink:hover { color: var(--text); }
 
   .device-row .name {
     font-family: var(--font-mono);
@@ -431,6 +444,7 @@
       <div class="breadcrumb">Dashboard / Overview</div>
       <div style="display:flex; align-items:center; gap:10px;">
         <button class="btn-small" id="theme-toggle">Dark</button>
+        <button class="btn-small" id="download-compliance-report" disabled>Download Compliance Report</button>
         <button class="btn-primary" id="run-full-scan">Run Full Scan</button>
       </div>
     </div>
@@ -514,7 +528,7 @@
 
   var SEV_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
 
-  // devices: name -> { name, host, collection_method, scanned, score, results: [] }
+  // devices: name -> { name, host, collection_method, scanned, score, results: [], has_remediation }
   var devices = {};
   var deviceOrder = [];
 
@@ -546,6 +560,9 @@
 
     deviceOrder.forEach(function (name) {
       var d = devices[name];
+
+      var entry = document.createElement("div");
+      entry.className = "device-entry";
 
       var row = document.createElement("div");
       row.className = "device-row";
@@ -586,7 +603,22 @@
         focusDevice(name);
       });
 
-      list.appendChild(row);
+      entry.appendChild(row);
+
+      if (d.has_remediation) {
+        var reportLink = document.createElement("a");
+        reportLink.className = "device-sublink";
+        reportLink.textContent = "Remediation report";
+        reportLink.href = "/report/remediation/" + encodeURIComponent(name);
+        reportLink.target = "_blank";
+        reportLink.rel = "noopener";
+        reportLink.addEventListener("click", function (e) {
+          e.stopPropagation();
+        });
+        entry.appendChild(reportLink);
+      }
+
+      list.appendChild(entry);
     });
   }
 
@@ -879,7 +911,16 @@
     renderScoreByDevicePanel();
     renderSeverityPanel();
     renderTable();
+    updateDownloadButton();
   }
+
+  function updateDownloadButton() {
+    document.getElementById("download-compliance-report").disabled = scannedDeviceNames().length === 0;
+  }
+
+  document.getElementById("download-compliance-report").addEventListener("click", function () {
+    window.location.href = "/report/compliance";
+  });
 
   // -----------------------------------------------------------
   // Scan log
@@ -965,6 +1006,7 @@
         devices[name].scanned = true;
         devices[name].score = result.data.after.score;
         devices[name].results = result.data.after.results;
+        devices[name].has_remediation = true;
 
         line.textContent = (
           "✓ " + name + " reconfigured — " + result.data.applied.length +
