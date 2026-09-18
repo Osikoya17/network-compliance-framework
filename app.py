@@ -19,6 +19,8 @@ from datetime import datetime
 from pathlib import Path
 
 from flask import Flask, Response, jsonify, request
+from ruamel.yaml import YAML
+from ruamel.yaml.comments import CommentedMap
 
 from main import load_baseline, load_devices, scan_device
 from remediation.applier import RemediationApplier
@@ -29,6 +31,8 @@ from webreport.report_generator import generate_remediation_report, generate_rep
 
 APP_ROOT = Path(__file__).parent
 INDEX_HTML_PATH = APP_ROOT / "webapp" / "index.html"
+DEVICES_YAML_PATH = APP_ROOT / "config" / "devices.yaml"
+BASELINE_YAML_PATH = APP_ROOT / "config" / "baseline.yaml"
 
 app = Flask(__name__)
 
@@ -38,6 +42,11 @@ app = Flask(__name__)
 # tens of seconds and shouldn't block other requests).
 STATE_LOCK = threading.Lock()
 STATE = {}
+
+# Serializes writes to config/devices.yaml and config/baseline.yaml so
+# two concurrent "Add Device" submissions can't interleave and corrupt
+# either file.
+DEVICES_FILE_LOCK = threading.Lock()
 
 
 def _device_by_name(name):
@@ -54,13 +63,20 @@ def _score_from_results(results):
     return round((passed / len(results)) * 100, 2)
 
 
-@app.route("/")
-def dashboard():
-    devices = load_devices()
+def _ryaml():
+    yaml = YAML()
+    yaml.indent(mapping=2, sequence=4, offset=2)
+    yaml.preserve_quotes = True
+    return yaml
 
+
+def _build_device_states():
+    # Same per-device shape the dashboard's INITIAL_STATE already uses
+    # -- deliberately excludes username/password, which the frontend
+    # never receives (see dashboard()/add_device()).
     with STATE_LOCK:
         device_states = []
-        for device in devices:
+        for device in load_devices():
             device_state = STATE.get(device["name"], {})
             last_scan = device_state.get("last_scan")
 
@@ -76,10 +92,14 @@ def dashboard():
                 ),
                 "has_remediation": device_state.get("last_remediation") is not None,
             })
+    return device_states
 
+
+@app.route("/")
+def dashboard():
     initial_state = {
         "hostname": socket.gethostname(),
-        "devices": device_states,
+        "devices": _build_device_states(),
     }
 
     html = INDEX_HTML_PATH.read_text(encoding="utf-8")
@@ -89,6 +109,119 @@ def dashboard():
     )
 
     return Response(html, mimetype="text/html")
+
+
+@app.route("/devices", methods=["POST"])
+def add_device():
+    body = request.get_json(silent=True) or {}
+
+    name = (body.get("name") or "").strip()
+    collection_method = (body.get("collection_method") or "").strip()
+    host = (body.get("host") or "").strip()
+    username = (body.get("username") or "").strip()
+    password = body.get("password") or ""
+    access_ports = body.get("access_ports") or []
+    trunk_ports = body.get("trunk_ports") or []
+
+    if not name:
+        return jsonify({"error": "Device name is required."}), 400
+
+    if collection_method not in ("ssh", "file"):
+        return jsonify({
+            "error": "collection_method must be 'ssh' or 'file'."
+        }), 400
+
+    if not isinstance(access_ports, list) or not all(isinstance(p, str) for p in access_ports):
+        return jsonify({"error": "access_ports must be a list of strings."}), 400
+
+    if not isinstance(trunk_ports, list) or not all(isinstance(p, str) for p in trunk_ports):
+        return jsonify({"error": "trunk_ports must be a list of strings."}), 400
+
+    access_ports = [p.strip() for p in access_ports if p.strip()]
+    trunk_ports = [p.strip() for p in trunk_ports if p.strip()]
+
+    if collection_method == "ssh" and (not host or not username or not password):
+        return jsonify({
+            "error": "host, username, and password are required when collection_method is 'ssh'."
+        }), 400
+
+    config_path = f"data/configurations/{name}.txt"
+
+    with DEVICES_FILE_LOCK:
+        yaml = _ryaml()
+
+        with DEVICES_YAML_PATH.open("r", encoding="utf-8") as f:
+            devices_doc = yaml.load(f)
+
+        existing_names = {
+            entry["name"].lower() for entry in devices_doc["devices"]
+        }
+        if name.lower() in existing_names:
+            return jsonify({
+                "error": f"A device named '{name}' already exists."
+            }), 400
+
+        new_entry = CommentedMap()
+        new_entry["name"] = name
+        new_entry["type"] = "cisco_ios"
+        new_entry["collection_method"] = collection_method
+        new_entry["host"] = host
+        new_entry["username"] = username
+        new_entry["password"] = password
+        new_entry["config"] = config_path
+
+        devices_list = devices_doc["devices"]
+        devices_list.append(new_entry)
+        devices_list.yaml_set_comment_before_after_key(
+            len(devices_list) - 1, before="\n"
+        )
+
+        with DEVICES_YAML_PATH.open("w", encoding="utf-8") as f:
+            yaml.dump(devices_doc, f)
+
+        if access_ports or trunk_ports:
+            with BASELINE_YAML_PATH.open("r", encoding="utf-8") as f:
+                baseline_doc = yaml.load(f)
+
+            switching = baseline_doc["baseline"]["switching"]
+
+            if access_ports:
+                if switching.get("access_ports") is None:
+                    switching["access_ports"] = CommentedMap()
+                switching["access_ports"][name] = access_ports
+
+            if trunk_ports:
+                if switching.get("trunk_ports") is None:
+                    switching["trunk_ports"] = CommentedMap()
+                switching["trunk_ports"][name] = trunk_ports
+
+            # Re-assert the blank-line separators between switching's
+            # sub-blocks: inserting a new key into access_ports/
+            # trunk_ports can otherwise disturb the trailing blank
+            # line that used to separate them from their next sibling
+            # key (ruamel ties that whitespace to the token stream,
+            # not to the block itself).
+            if "trunk_ports" in switching:
+                switching.yaml_set_comment_before_after_key("trunk_ports", before="\n")
+            baseline_doc["baseline"].yaml_set_comment_before_after_key(
+                "management", before="\n"
+            )
+
+            with BASELINE_YAML_PATH.open("w", encoding="utf-8") as f:
+                yaml.dump(baseline_doc, f)
+
+    warning = None
+    if collection_method == "file" and not Path(config_path).exists():
+        warning = (
+            "config file does not exist yet — this device cannot be "
+            f"scanned until {config_path} is created."
+        )
+
+    response = {"devices": _build_device_states()}
+    if warning:
+        response["warning"] = warning
+
+    return jsonify(response)
 
 
 @app.route("/scan/<device_name>", methods=["POST"])
