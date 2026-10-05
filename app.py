@@ -322,6 +322,7 @@ def remediate(device_name):
 
     applied = []
     skipped = []
+    pushed_texts = set()
 
     try:
         for violation in violations:
@@ -349,10 +350,27 @@ def remediate(device_name):
                 })
                 continue
 
-            applier.apply(remediation_text)
+            # Different checks can render the identical fix (e.g. port
+            # security + max MAC on one interface); push it once.
+            if remediation_text not in pushed_texts:
+                applier.apply(remediation_text)
+                pushed_texts.add(remediation_text)
             applied.append({
                 "rule": violation.rule,
                 "interface": violation.interface,
+            })
+
+        if not applied:
+            # Nothing was changed on the device: no re-scan, no state
+            # update, no remediation record.
+            unchanged = [r.to_dict() for r in before_results]
+            return jsonify({
+                "device": device_name,
+                "live": live,
+                "applied": [],
+                "skipped": skipped,
+                "before": {"score": before_score, "results": unchanged},
+                "after": {"score": before_score, "results": unchanged},
             })
 
         if live:
@@ -373,19 +391,36 @@ def remediate(device_name):
         }), 502
 
     now = datetime.now().isoformat()
+    method = "live SSH (Netmiko)" if live else "file-based"
 
     with STATE_LOCK:
-        STATE.setdefault(device_name, {})["last_scan"] = {
+        device_state = STATE.setdefault(device_name, {})
+        previous = device_state.get("last_remediation")
+        last_scan_ts = device_state.get("last_scan", {}).get("timestamp")
+
+        # Successive reconfigures with no scan in between are one chain:
+        # keep the original "before" so the report covers all of them.
+        record_before_results = before_results
+        record_before_score = before_score
+        if (
+            previous
+            and previous["method"] == method
+            and previous["timestamp"] == last_scan_ts
+        ):
+            record_before_results = previous["before_results"]
+            record_before_score = previous["before_score"]
+
+        device_state["last_scan"] = {
             "results": after_results,
             "score": after_score,
             "timestamp": now,
         }
-        STATE[device_name]["last_remediation"] = {
-            "before_results": before_results,
-            "before_score": before_score,
+        device_state["last_remediation"] = {
+            "before_results": record_before_results,
+            "before_score": record_before_score,
             "after_results": after_results,
             "after_score": after_score,
-            "method": "live SSH (Netmiko)" if live else "file-based",
+            "method": method,
             "timestamp": now,
         }
 

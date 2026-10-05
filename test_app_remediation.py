@@ -139,6 +139,48 @@ class RemediationScopeTests(unittest.TestCase):
                 }])
                 self.applier.return_value.apply.assert_not_called()
 
+    def test_identical_fixes_for_one_interface_are_pushed_once(self):
+        self.before[:] = [
+            check("Port security enabled", "Ethernet0/2", expected=1),
+            check("Maximum MAC addresses", "Ethernet0/2", expected=1),
+        ]
+        with patch.object(webapp.RemediationGenerator, "generate_for_violation",
+                          return_value=webapp.RemediationGenerator().generate(
+                              "enable_port_security.j2",
+                              {"interface": "Ethernet0/2", "maximum_mac": 1})):
+            data = self.post(all=True).get_json()
+        self.assertEqual(self.applier.return_value.apply.call_count, 1)
+        self.assertEqual([a["rule"] for a in data["applied"]],
+                         ["Port security enabled", "Maximum MAC addresses"])
+
+    def test_nothing_applied_skips_rescan_and_leaves_state_untouched(self):
+        self.before[:] = [check("Hostname correct", None)]
+        data = self.post(rule="Hostname correct", interface=None).get_json()
+        self.scan.assert_not_called()
+        self.assertEqual(data["applied"], [])
+        self.assertEqual(data["before"], data["after"])
+        self.assertNotIn("last_remediation", self.state["SW1-ACCESS"])
+        self.assertIs(self.state["SW1-ACCESS"]["last_scan"]["results"], self.before)
+
+    def test_consecutive_reconfigures_keep_original_before(self):
+        self.post(rule="Unused ports shutdown", interface="Ethernet0/2")
+        first = self.state["SW1-ACCESS"]["last_remediation"]
+        self.assertIs(first["before_results"], self.before)
+        self.scan.return_value = {"results": [check(status="PASS"), check(interface="Ethernet0/3", status="PASS"),
+                                              self.before[2]], "score": 66.67}
+        data = self.post(rule="Unused ports shutdown", interface="Ethernet0/3").get_json()
+        second = self.state["SW1-ACCESS"]["last_remediation"]
+        self.assertIs(second["before_results"], self.before)
+        self.assertEqual(second["before_score"], 0)
+        self.assertEqual(data["before"]["score"], 33.33)
+
+    def test_scan_between_reconfigures_starts_a_new_chain(self):
+        self.post(rule="Unused ports shutdown", interface="Ethernet0/2")
+        self.state["SW1-ACCESS"]["last_scan"]["timestamp"] = "later-scan"
+        rescanned = self.state["SW1-ACCESS"]["last_scan"]["results"]
+        self.post(rule="Unused ports shutdown", interface="Ethernet0/3")
+        self.assertIs(self.state["SW1-ACCESS"]["last_remediation"]["before_results"], rescanned)
+
     def test_unmapped_rule_returns_clear_message(self):
         self.before[:] = [check("Hostname correct", None)]
         response = self.post(rule="Hostname correct", interface=None)

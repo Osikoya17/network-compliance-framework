@@ -1,5 +1,7 @@
 from netmiko import ConnectHandler
 
+from collectors.configuration_collector import CONNECT_TIMEOUTS
+
 
 class LiveRemediationApplier:
     """
@@ -38,7 +40,7 @@ class LiveRemediationApplier:
         connection = None
 
         try:
-            connection = ConnectHandler(**connection_parameters)
+            connection = ConnectHandler(**connection_parameters, **CONNECT_TIMEOUTS)
 
             output = connection.send_config_set(
                 commands,

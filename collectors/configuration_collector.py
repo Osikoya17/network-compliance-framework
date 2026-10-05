@@ -1,6 +1,8 @@
 from pathlib import Path
 from netmiko import ConnectHandler
 
+CONNECT_TIMEOUTS = {"conn_timeout": 30, "auth_timeout": 60, "banner_timeout": 60}
+
 
 class ConfigurationCollector:
 
@@ -78,7 +80,8 @@ class ConfigurationCollector:
 
         try:
             connection = ConnectHandler(
-                **connection_parameters
+                **connection_parameters,
+                **CONNECT_TIMEOUTS
             )
 
             print("SSH connection established.")
