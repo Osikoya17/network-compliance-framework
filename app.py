@@ -19,6 +19,7 @@ from datetime import datetime
 from pathlib import Path
 
 from flask import Flask, Response, jsonify, request
+from jinja2 import TemplateNotFound
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 
@@ -262,6 +263,21 @@ def remediate(device_name):
         return jsonify({"error": f"Unknown device: {device_name}"}), 404
 
     body = request.get_json(silent=True) or {}
+    if not isinstance(body, dict):
+        return jsonify({"error": "Expected a JSON object."}), 400
+
+    if "rule" in body:
+        rule = body["rule"]
+        interface = body.get("interface")
+        if not isinstance(rule, str) or not rule.strip():
+            return jsonify({"error": "rule must be a non-empty string."}), 400
+        if interface is not None and not isinstance(interface, str):
+            return jsonify({"error": "interface must be a string or null."}), 400
+    elif body.get("all") is not True:
+        return jsonify({
+            "error": "Specify rule and interface, or all: true, to remediate."
+        }), 400
+
     live = bool(body.get("live", False))
 
     with STATE_LOCK:
@@ -276,6 +292,18 @@ def remediate(device_name):
     before_results = last_scan["results"]
     before_score = last_scan["score"]
     violations = [r for r in before_results if r.status == "FAIL"]
+    if "rule" in body:
+        violations = [
+            r for r in violations
+            if r.rule == rule and r.interface == interface
+        ]
+        if not violations:
+            return jsonify({
+                "error": (
+                    f"no matching failing check for {rule} on {device_name} "
+                    f"({interface if interface is not None else 'whole device'})"
+                )
+            }), 400
 
     baseline = load_baseline()
     generator = RemediationGenerator()
@@ -297,12 +325,27 @@ def remediate(device_name):
 
     try:
         for violation in violations:
-            remediation_text = generator.generate_for_violation(violation)
+            try:
+                if violation.rule == "Maximum MAC addresses" and violation.interface is not None:
+                    # This check shares the port-security fix; keep its
+                    # original identity in the response and its interface.
+                    remediation_text = generator.generate(
+                        "enable_port_security.j2",
+                        {
+                            "interface": violation.interface,
+                            "maximum_mac": violation.expected,
+                        },
+                    )
+                else:
+                    remediation_text = generator.generate_for_violation(violation)
+            except TemplateNotFound:
+                remediation_text = None
 
-            if remediation_text is None:
+            if not remediation_text or not remediation_text.strip():
                 skipped.append({
                     "rule": violation.rule,
                     "interface": violation.interface,
+                    "reason": f"no automated fix for {violation.rule}",
                 })
                 continue
 

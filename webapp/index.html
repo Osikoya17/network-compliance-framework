@@ -786,6 +786,18 @@
 
       entry.appendChild(row);
 
+      var failingCount = d.results.filter(function (r) { return r.status === "FAIL"; }).length;
+      if (d.scanned && failingCount > 0) {
+        var allBtn = document.createElement("button");
+        allBtn.className = "btn-remediate";
+        allBtn.style.margin = "0 16px 10px";
+        allBtn.textContent = "Reconfigure all failing (" + failingCount + ")";
+        allBtn.addEventListener("click", function () {
+          remediateDevice(name, allBtn, { all: true });
+        });
+        entry.appendChild(allBtn);
+      }
+
       if (d.has_remediation) {
         var reportLink = document.createElement("a");
         reportLink.className = "device-sublink";
@@ -1017,7 +1029,7 @@
           btn.className = "btn-remediate";
           btn.textContent = "Reconfigure";
           btn.addEventListener("click", function () {
-            remediateDevice(name, btn);
+            remediateDevice(name, btn, { rule: r.rule, interface: r.interface || null });
           });
           actionTd.appendChild(btn);
         }
@@ -1153,14 +1165,21 @@
       });
   }
 
-  function remediateDevice(name, triggerBtn) {
+  function remediateDevice(name, triggerBtn, target) {
+    var failingCount = devices[name].results.filter(function (r) { return r.status === "FAIL"; }).length;
+    var prompt = target.all === true
+      ? "Push fixes for all " + failingCount + " failing checks to the LIVE device " + name + " over SSH now?\n"
+      : "Push this fix to the LIVE device " + name + " over SSH now?\n" +
+        "Rule: " + target.rule + "\n" +
+        "Interface: " + (target.interface || "whole device") + "\n";
     var confirmed = window.confirm(
-      "Push these fixes to the LIVE device " + name + " over SSH now? " +
+      prompt +
       "This is a real configuration change, not a test copy, and is not " +
       "automatically reversible."
     );
     if (!confirmed) return;
 
+    var originalLabel = triggerBtn ? triggerBtn.textContent : "";
     if (triggerBtn) {
       triggerBtn.disabled = true;
       triggerBtn.textContent = "Reconfiguring…";
@@ -1171,7 +1190,9 @@
     return fetch("/remediate/" + encodeURIComponent(name), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ live: true }),
+      body: JSON.stringify(target.all === true
+        ? { live: true, all: true }
+        : { live: true, rule: target.rule, interface: target.interface }),
     })
       .then(function (resp) {
         return resp.json().then(function (data) { return { ok: resp.ok, data: data }; });
@@ -1180,20 +1201,26 @@
         if (!result.ok) {
           line.textContent = "✗ " + name + " reconfiguration: " + (result.data.error || "failed");
           line.className = "err";
-          if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.textContent = "Reconfigure"; }
+          if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.textContent = originalLabel; }
           return null;
         }
 
         devices[name].scanned = true;
         devices[name].score = result.data.after.score;
         devices[name].results = result.data.after.results;
-        devices[name].has_remediation = true;
+        devices[name].has_remediation = devices[name].has_remediation || result.data.applied.length > 0;
 
         line.textContent = (
           "✓ " + name + " reconfigured — " + result.data.applied.length +
           " fix(es) applied: " + result.data.before.score + "% → " + result.data.after.score + "%"
         );
-        line.className = "ok";
+        line.className = result.data.applied.length > 0 ? "ok" : "warn";
+        if (result.data.applied.length === 0) {
+          line.textContent = name + ": no fixes applied";
+        }
+        (result.data.skipped || []).forEach(function (item) {
+          logLine(name + ": " + item.reason + " (" + (item.interface || "whole device") + ")", "warn");
+        });
 
         renderAll();
         return result.data;
@@ -1201,7 +1228,7 @@
       .catch(function (err) {
         line.textContent = "✗ " + name + " reconfiguration: " + err;
         line.className = "err";
-        if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.textContent = "Reconfigure"; }
+        if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.textContent = originalLabel; }
         return null;
       });
   }
